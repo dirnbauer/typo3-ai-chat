@@ -10,7 +10,7 @@ use Netresearch\NrLlm\Domain\Model\UsageStatistics;
 use Netresearch\NrLlm\Provider\Contract\DocumentCapableInterface;
 use Netresearch\NrLlm\Provider\Contract\ProviderInterface;
 use Netresearch\NrLlm\Provider\Contract\VisionCapableInterface;
-use Netresearch\NrLlm\Provider\ProviderAdapterRegistry;
+use Netresearch\NrLlm\Provider\ProviderAdapterRegistryInterface;
 use Netresearch\NrMcpAgent\Configuration\ExtensionConfiguration;
 use Netresearch\NrMcpAgent\Document\DocumentExtractorRegistry;
 use Netresearch\NrMcpAgent\Domain\Model\Conversation;
@@ -74,7 +74,7 @@ class ChatServiceTest extends TestCase
             'promptTemplate' => $prompts['prompt_template'] ?? '',
         ]);
 
-        $adapterRegistry = $this->createMock(ProviderAdapterRegistry::class);
+        $adapterRegistry = $this->createMock(ProviderAdapterRegistryInterface::class);
         $adapterRegistry->method('createAdapterFromModel')->willReturn($provider);
 
         return new ChatService($repository, $config, $mcpProvider, $llmTaskRepository, $adapterRegistry, $resourceFactory, $siteFinder, new DocumentExtractorRegistry([]));
@@ -823,7 +823,7 @@ class ChatServiceTest extends TestCase
         $llmTaskRepository->method('resolveModelByTaskUid')
             ->willThrowException(new RuntimeException('Could not resolve LLM model for task uid 999'));
 
-        $adapterRegistry = $this->createMock(ProviderAdapterRegistry::class);
+        $adapterRegistry = $this->createMock(ProviderAdapterRegistryInterface::class);
         $repository = $this->createMock(ConversationRepository::class);
 
         $GLOBALS['BE_USER'] = new stdClass();
@@ -854,7 +854,7 @@ class ChatServiceTest extends TestCase
             ->willThrowException(new RuntimeException('Could not map LLM model for task uid 1'));
 
         $repository = $this->createMock(ConversationRepository::class);
-        $adapterRegistry = $this->createMock(ProviderAdapterRegistry::class);
+        $adapterRegistry = $this->createMock(ProviderAdapterRegistryInterface::class);
 
         $GLOBALS['BE_USER'] = new stdClass();
         $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
@@ -1480,7 +1480,7 @@ class ChatServiceTest extends TestCase
             'promptTemplate' => '',
         ]);
 
-        $adapterRegistry = $this->createMock(\Netresearch\NrLlm\Provider\ProviderAdapterRegistry::class);
+        $adapterRegistry = $this->createMock(\Netresearch\NrLlm\Provider\ProviderAdapterRegistryInterface::class);
         $adapterRegistry->method('createAdapterFromModel')->willReturn($provider);
 
         return new ChatService(

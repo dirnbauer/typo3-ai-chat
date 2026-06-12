@@ -7,9 +7,10 @@ namespace Netresearch\NrMcpAgent\Tests\Unit\Service;
 use Netresearch\NrLlm\Domain\Model\CompletionResponse;
 use Netresearch\NrLlm\Domain\Model\Model as LlmModel;
 use Netresearch\NrLlm\Domain\Model\UsageStatistics;
+use Netresearch\NrLlm\Domain\ValueObject\ToolCall;
 use Netresearch\NrLlm\Provider\Contract\ProviderInterface;
 use Netresearch\NrLlm\Provider\Contract\ToolCapableInterface;
-use Netresearch\NrLlm\Provider\ProviderAdapterRegistry;
+use Netresearch\NrLlm\Provider\ProviderAdapterRegistryInterface;
 use Netresearch\NrMcpAgent\Configuration\ExtensionConfiguration;
 use Netresearch\NrMcpAgent\Document\DocumentExtractorRegistry;
 use Netresearch\NrMcpAgent\Domain\Model\Conversation;
@@ -73,7 +74,7 @@ class ChatServiceToolLoopTest extends TestCase
             'promptTemplate' => '',
         ]);
 
-        $adapterRegistry = $this->createMock(ProviderAdapterRegistry::class);
+        $adapterRegistry = $this->createMock(ProviderAdapterRegistryInterface::class);
         $adapterRegistry->method('createAdapterFromModel')->willReturn($provider);
 
         return new ChatService($repository, $config, $mcpProvider, $llmTaskRepository, $adapterRegistry, $this->createMock(ResourceFactory::class), $this->createMock(SiteFinder::class), new DocumentExtractorRegistry([]));
@@ -177,6 +178,58 @@ class ChatServiceToolLoopTest extends TestCase
         $messages = $conversation->getDecodedMessages();
         // user, assistant+tool_calls, tool, assistant
         self::assertGreaterThanOrEqual(4, count($messages));
+    }
+
+    #[Test]
+    public function toolLoopNormalisesTypedToolCallObjects(): void
+    {
+        $this->setUpBeUser();
+
+        $conversation = new Conversation();
+        $conversation->setBeUser(1);
+        $conversation->appendMessage(MessageRole::User, 'Use a tool');
+
+        // nr-llm >= 0.12 providers emit typed ToolCall value objects
+        $toolCall = new ToolCall('call_typed', 'typed_tool', ['key' => 'val']);
+
+        $callCount = 0;
+        $provider = $this->createMock(ToolCapableProviderStub::class);
+        $provider->method('chatCompletionWithTools')
+            ->willReturnCallback(function () use ($toolCall, &$callCount) {
+                $callCount++;
+                if ($callCount === 1) {
+                    return $this->createCompletionResponse('', [$toolCall]);
+                }
+                return $this->createCompletionResponse('Done!');
+            });
+
+        $mcpProvider = $this->createMock(McpToolProviderInterface::class);
+        $mcpProvider->method('getToolDefinitions')->willReturn($this->dummyTools);
+        $mcpProvider->expects(self::once())
+            ->method('executeTool')
+            ->with('typed_tool', ['key' => 'val'])
+            ->willReturn('tool output');
+
+        $service = $this->createService($provider, mcpProvider: $mcpProvider);
+        $service->processConversation($conversation);
+
+        self::assertSame(ConversationStatus::Idle, $conversation->getStatus());
+
+        // The persisted assistant message must carry the legacy array shape,
+        // not the value object — resumed conversations replay it from JSON.
+        // getDecodedMessages() additionally normalises arguments to the JSON
+        // string the OpenAI wire format requires.
+        $messages = $conversation->getDecodedMessages();
+        $assistantMessage = $messages[1];
+        self::assertSame('assistant', $assistantMessage['role']);
+        self::assertSame([
+            'id' => 'call_typed',
+            'type' => 'function',
+            'function' => [
+                'name' => 'typed_tool',
+                'arguments' => '{"key":"val"}',
+            ],
+        ], $assistantMessage['tool_calls'][0]);
     }
 
     #[Test]
@@ -471,7 +524,7 @@ class ChatServiceToolLoopTest extends TestCase
             'systemPrompt' => '',
             'promptTemplate' => '',
         ]);
-        $adapterRegistry = $this->createMock(ProviderAdapterRegistry::class);
+        $adapterRegistry = $this->createMock(ProviderAdapterRegistryInterface::class);
         $adapterRegistry->method('createAdapterFromModel')->willReturn($provider);
 
         $service = new ChatService($repository, $config, $mcpProvider, $llmTaskRepository, $adapterRegistry, $this->createMock(ResourceFactory::class), $this->createMock(SiteFinder::class), new DocumentExtractorRegistry([]));

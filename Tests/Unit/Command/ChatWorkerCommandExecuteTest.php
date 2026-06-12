@@ -7,7 +7,7 @@ namespace Netresearch\NrMcpAgent\Tests\Unit\Command;
 use Doctrine\DBAL\Result;
 use Netresearch\NrLlm\Domain\Model\Model as LlmModel;
 use Netresearch\NrLlm\Provider\Contract\ProviderInterface;
-use Netresearch\NrLlm\Provider\ProviderAdapterRegistry;
+use Netresearch\NrLlm\Provider\ProviderAdapterRegistryInterface;
 use Netresearch\NrMcpAgent\Command\ChatWorkerCommand;
 use Netresearch\NrMcpAgent\Configuration\ExtensionConfiguration;
 use Netresearch\NrMcpAgent\Document\DocumentExtractorRegistry;
@@ -88,7 +88,7 @@ class ChatWorkerCommandExecuteTest extends TestCase
             'promptTemplate' => '',
         ]);
 
-        $adapterRegistry = $this->createMock(ProviderAdapterRegistry::class);
+        $adapterRegistry = $this->createMock(ProviderAdapterRegistryInterface::class);
         $adapterRegistry->method('createAdapterFromModel')->willReturn($this->createMock(ProviderInterface::class));
 
         return new ChatService(

@@ -55,7 +55,14 @@ jobs:
           coverage: none
 
       - name: Install dependencies (TYPO3 ${{ matrix.typo3 }})
-        run: composer require --no-interaction typo3/cms-core:"${{ matrix.typo3 }}" typo3/cms-backend:"${{ matrix.typo3 }}" -W --no-progress
+        # The lock file targets the newest supported TYPO3; this leg re-resolves
+        # the whole tree for the older branch. `require -W` cannot do that: dev
+        # deps like testing-framework and phpstan-typo3 are not dependencies of
+        # cms-core and stay locked, leaving only old, advisory-blocked 13.4.x
+        # releases as install candidates.
+        run: |
+          composer require --no-interaction --no-update typo3/cms-core:"${{ matrix.typo3 }}" typo3/cms-backend:"${{ matrix.typo3 }}"
+          composer update --no-interaction --no-progress
 
       - name: Unit tests
         run: composer ci:tests:unit
