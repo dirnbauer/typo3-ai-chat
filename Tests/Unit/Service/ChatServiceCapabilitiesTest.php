@@ -8,7 +8,7 @@ use Netresearch\NrLlm\Domain\Model\Model as LlmModel;
 use Netresearch\NrLlm\Provider\Contract\DocumentCapableInterface;
 use Netresearch\NrLlm\Provider\Contract\ProviderInterface;
 use Netresearch\NrLlm\Provider\Contract\VisionCapableInterface;
-use Netresearch\NrLlm\Provider\ProviderAdapterRegistry;
+use Netresearch\NrLlm\Provider\ProviderAdapterRegistryInterface;
 use Netresearch\NrMcpAgent\Configuration\ExtensionConfiguration;
 use Netresearch\NrMcpAgent\Domain\Repository\ConversationRepository;
 use Netresearch\NrMcpAgent\Domain\Repository\LlmTaskRepository;
@@ -44,7 +44,7 @@ class ChatServiceCapabilitiesTest extends TestCase
             'promptTemplate' => '',
         ]);
 
-        $adapterRegistry = $this->createMock(ProviderAdapterRegistry::class);
+        $adapterRegistry = $this->createMock(ProviderAdapterRegistryInterface::class);
         $adapterRegistry->method('createAdapterFromModel')->willReturn($provider);
 
         $registry ??= new \Netresearch\NrMcpAgent\Document\DocumentExtractorRegistry([]);
@@ -176,7 +176,7 @@ class ChatServiceCapabilitiesTest extends TestCase
         $llmTaskRepository = $this->createMock(LlmTaskRepository::class);
         $llmTaskRepository->method('resolveModelByTaskUid')->willThrowException(new RuntimeException('Model not found'));
 
-        $adapterRegistry = $this->createMock(ProviderAdapterRegistry::class);
+        $adapterRegistry = $this->createMock(ProviderAdapterRegistryInterface::class);
         $adapterRegistry->method('createAdapterFromModel')->willReturn($provider);
 
         $service = new ChatService(

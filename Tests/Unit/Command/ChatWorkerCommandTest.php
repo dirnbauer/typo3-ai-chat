@@ -6,7 +6,7 @@ namespace Netresearch\NrMcpAgent\Tests\Unit\Command;
 
 use Netresearch\NrLlm\Domain\Model\Model as LlmModel;
 use Netresearch\NrLlm\Provider\Contract\ProviderInterface;
-use Netresearch\NrLlm\Provider\ProviderAdapterRegistry;
+use Netresearch\NrLlm\Provider\ProviderAdapterRegistryInterface;
 use Netresearch\NrMcpAgent\Command\ChatWorkerCommand;
 use Netresearch\NrMcpAgent\Configuration\ExtensionConfiguration;
 use Netresearch\NrMcpAgent\Document\DocumentExtractorRegistry;
@@ -117,7 +117,7 @@ class ChatWorkerCommandTest extends TestCase
             'promptTemplate' => '',
         ]);
 
-        $adapterRegistry = $this->createMock(ProviderAdapterRegistry::class);
+        $adapterRegistry = $this->createMock(ProviderAdapterRegistryInterface::class);
         $adapterRegistry->method('createAdapterFromModel')->willReturn($this->createMock(ProviderInterface::class));
 
         $chatService = new ChatService($chatRepository, $config, $mcpProvider, $llmTaskRepository, $adapterRegistry, $this->createMock(ResourceFactory::class), $this->createMock(SiteFinder::class), new DocumentExtractorRegistry([]));

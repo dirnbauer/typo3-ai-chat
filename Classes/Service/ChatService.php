@@ -6,11 +6,13 @@ namespace Netresearch\NrMcpAgent\Service;
 
 use LogicException;
 use Netresearch\NrLlm\Domain\Model\CompletionResponse;
+use Netresearch\NrLlm\Domain\ValueObject\ToolCall;
+use Netresearch\NrLlm\Domain\ValueObject\ToolSpec;
 use Netresearch\NrLlm\Provider\Contract\DocumentCapableInterface;
 use Netresearch\NrLlm\Provider\Contract\ProviderInterface;
 use Netresearch\NrLlm\Provider\Contract\ToolCapableInterface;
 use Netresearch\NrLlm\Provider\Contract\VisionCapableInterface;
-use Netresearch\NrLlm\Provider\ProviderAdapterRegistry;
+use Netresearch\NrLlm\Provider\ProviderAdapterRegistryInterface;
 use Netresearch\NrMcpAgent\Configuration\ExtensionConfiguration;
 use Netresearch\NrMcpAgent\Document\DocumentExtractorRegistry;
 use Netresearch\NrMcpAgent\Domain\Model\Conversation;
@@ -39,7 +41,7 @@ final class ChatService implements ChatCapabilitiesInterface
         private readonly ExtensionConfiguration $config,
         private readonly McpToolProviderInterface $mcpToolProvider,
         private readonly LlmTaskRepository $llmTaskRepository,
-        private readonly ProviderAdapterRegistry $adapterRegistry,
+        private readonly ProviderAdapterRegistryInterface $adapterRegistry,
         private readonly ResourceFactory $resourceFactory,
         private readonly SiteFinder $siteFinder,
         private readonly DocumentExtractorRegistry $documentExtractorRegistry,
@@ -206,16 +208,29 @@ final class ChatService implements ChatCapabilitiesInterface
             'tool_choice' => 'auto',
         ]);
 
+        // Providers expect typed ToolSpec instances; MCP delivers the wire shape.
+        $toolSpecs = array_map(ToolSpec::fromArray(...), $tools);
+
         for ($i = 0; $i < self::MAX_TOOL_ITERATIONS; $i++) {
             // buildLlmMessages expands fileUid refs to base64 for the LLM call only —
             // never persist the expanded result back to DB.
             $messages = $this->buildLlmMessages($conversation->getDecodedMessages(), $provider);
 
-            $response = $this->callToolChatWithRetry($provider, $messages, $tools, $optionsArray);
+            $response = $this->callToolChatWithRetry($provider, $messages, $toolSpecs, $optionsArray);
 
             if ($response->hasToolCalls()) {
-                /** @var array<mixed> $toolCalls */
-                $toolCalls = $response->toolCalls ?? [];
+                // Normalise typed ToolCall objects to the legacy wire shape —
+                // conversations persist tool calls as JSON, and resumed
+                // conversations replay them as plain arrays anyway. Malformed
+                // entries are dropped instead of failing the conversation.
+                $toolCalls = [];
+                foreach ($response->toolCalls ?? [] as $call) {
+                    if ($call instanceof ToolCall) {
+                        $toolCalls[] = $call->toArray();
+                    } elseif (is_array($call)) {
+                        $toolCalls[] = $call;
+                    }
+                }
                 // Append assistant + tool messages to the stored (non-expanded) messages
                 $storedMessages = $conversation->getDecodedMessages();
                 $storedMessages[] = [
@@ -276,7 +291,7 @@ final class ChatService implements ChatCapabilitiesInterface
 
     /**
      * @param list<array<string, mixed>> $messages
-     * @param list<array{type: string, function: array{name: string, description: string, parameters: array<string, mixed>}}> $tools
+     * @param list<ToolSpec> $tools
      * @param array<string, mixed> $options
      */
     private function callToolChatWithRetry(
@@ -312,7 +327,7 @@ final class ChatService implements ChatCapabilitiesInterface
      * Resolve a fully configured provider adapter from the task chain.
      *
      * Follows: Task → Configuration → Model → Provider (DB entities),
-     * then uses ProviderAdapterRegistry to create a configured adapter instance.
+     * then uses the ProviderAdapterRegistryInterface implementation to create a configured adapter instance.
      */
     private function resolveProvider(): ProviderInterface
     {
