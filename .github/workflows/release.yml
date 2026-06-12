@@ -18,6 +18,9 @@ jobs:
       archive-prefix: nr-mcp-agent
       package-name: netresearch/nr-mcp-agent
       extension-key: nr_mcp_agent
-      # No TYPO3_TER_ACCESS_TOKEN secret in this repo — the extension is
-      # not published to TER yet. Remove this once the token is configured.
+      # The extension is not published anywhere yet: no TER token in this
+      # repo, not on Packagist (consumers use a VCS repository entry), not
+      # registered on docs.typo3.org. Remove these as each channel is set up.
       skip-ter: true
+      skip-packagist: true
+      skip-docs: true
