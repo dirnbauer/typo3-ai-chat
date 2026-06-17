@@ -41,7 +41,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Install PHP dependencies
         run: composer require --no-interaction typo3/cms-core:"^13.4" typo3/cms-backend:"^13.4" -W --no-progress
