@@ -280,3 +280,50 @@ for image formats and, if the provider also implements
 (e.g. ``['pdf']``). The frontend receives this list via ``GET /ai-chat/status``
 and uses it to set the file picker's ``accept`` attribute dynamically —
 ensuring users can only select file types the current provider can process.
+
+Component map
+=============
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 40 35
+
+   * - Component
+     - Responsibility
+     - Key files
+   * - **Backend Module**
+     - Chat UI (Admin Tools > AI Chat)
+     - ``Classes/Controller/``, ``Resources/Private/Templates/``
+   * - **Floating Panel**
+     - Toolbar chat widget, persistent across navigation
+     - ``Resources/Public/JavaScript/`` (Lit)
+   * - **Agent Loop**
+     - LLM call → tool use → reply, with retry logic
+     - ``Classes/Service/AgentLoopService.php``
+   * - **MCP Client**
+     - Spawns ``typo3-mcp-server``, handles stdio protocol
+     - ``Classes/Mcp/``
+   * - **Conversation Store**
+     - Persists messages, pins, auto-archive
+     - ``Classes/Domain/Repository/``
+   * - **CLI Commands**
+     - ``ai-chat:process`` (exec), ``ai-chat:worker`` (long-running)
+     - ``Classes/Command/``
+   * - **Access Control**
+     - Group-based access, concurrency caps, length limits
+     - ``Classes/Service/AccessControlService.php``
+
+Dependency rules
+================
+
+Enforced via `PHPAt <https://github.com/carlosas/phpat>`_ — runs automatically
+with PHPStan:
+
+-   ``Domain`` MUST NOT depend on ``Controller`` or ``Command``
+-   ``Controller`` may depend on ``Domain`` and ``Service``
+-   ``Service`` may depend on ``Domain``; MUST NOT depend on ``Controller``
+-   ``Mcp`` may depend on ``Domain`` and ``Service``; MUST NOT depend on
+    ``Controller``
+-   ``Tests`` may depend on anything
+
+Architecture tests: ``Tests/Architecture/LayerDependencyTest.php``
