@@ -56,7 +56,7 @@ class ExtensionConfigurationTest extends TestCase
     public function hasLegacyMcpFieldsReturnsFalseWhenFieldsEmpty(): void
     {
         // Consume the setUp mock first (FIFO queue)
-        new ExtensionConfiguration();
+        GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
 
         $mock = $this->createMock(Typo3ExtensionConfiguration::class);
         $mock->method('get')->with('nr_mcp_agent')->willReturn([
@@ -72,7 +72,7 @@ class ExtensionConfigurationTest extends TestCase
     public function isMcpEnabledReturnsFalseForZeroString(): void
     {
         // Consume the setUp mock first (FIFO queue)
-        new ExtensionConfiguration();
+        GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
 
         $mock = $this->createMock(Typo3ExtensionConfiguration::class);
         $mock->method('get')->with('nr_mcp_agent')->willReturn([
@@ -88,7 +88,7 @@ class ExtensionConfigurationTest extends TestCase
     public function getMaxConversationsPerUserReturnsConfiguredValue(): void
     {
         // Consume the setUp mock first
-        new ExtensionConfiguration();
+        GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
 
         $mock = $this->createMock(Typo3ExtensionConfiguration::class);
         $mock->method('get')->with('nr_mcp_agent')->willReturn([
@@ -104,7 +104,7 @@ class ExtensionConfigurationTest extends TestCase
     public function getAutoArchiveDaysReturnsConfiguredValue(): void
     {
         // Consume the setUp mock first
-        new ExtensionConfiguration();
+        GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
 
         $mock = $this->createMock(Typo3ExtensionConfiguration::class);
         $mock->method('get')->with('nr_mcp_agent')->willReturn([
@@ -120,7 +120,7 @@ class ExtensionConfigurationTest extends TestCase
     public function getAutoArchiveDaysDefaultsTo30(): void
     {
         // Consume the setUp mock first
-        new ExtensionConfiguration();
+        GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
 
         $mock = $this->createMock(Typo3ExtensionConfiguration::class);
         $mock->method('get')->with('nr_mcp_agent')->willReturn([]);
@@ -134,7 +134,7 @@ class ExtensionConfigurationTest extends TestCase
     public function getMaxConversationsPerUserDefaultsTo50(): void
     {
         // Consume the setUp mock first
-        new ExtensionConfiguration();
+        GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
 
         $mock = $this->createMock(Typo3ExtensionConfiguration::class);
         $mock->method('get')->with('nr_mcp_agent')->willReturn([]);
@@ -148,7 +148,7 @@ class ExtensionConfigurationTest extends TestCase
     public function hasLegacyMcpFieldsReturnsTrueWhenArgsSet(): void
     {
         // Consume the setUp mock first
-        new ExtensionConfiguration();
+        GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
 
         $mock = $this->createMock(Typo3ExtensionConfiguration::class);
         $mock->method('get')->with('nr_mcp_agent')->willReturn([
@@ -171,7 +171,7 @@ class ExtensionConfigurationTest extends TestCase
     public function defaultsAreUsedForMissingKeys(): void
     {
         // Consume the setUp mock first (FIFO queue)
-        new ExtensionConfiguration();
+        GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
 
         $mock = $this->createMock(Typo3ExtensionConfiguration::class);
         $mock->method('get')->with('nr_mcp_agent')->willReturn([]);
@@ -211,7 +211,7 @@ class ExtensionConfigurationTest extends TestCase
     public function getAllowedGroupIdsReturnsSingleValue(): void
     {
         // Consume the setUp mock first
-        new ExtensionConfiguration();
+        GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
 
         $mock = $this->createMock(Typo3ExtensionConfiguration::class);
         $mock->method('get')->with('nr_mcp_agent')->willReturn([
@@ -227,7 +227,7 @@ class ExtensionConfigurationTest extends TestCase
     public function hasLegacyMcpFieldsReturnsFalseWhenEmptyStringValues(): void
     {
         // Consume the setUp mock first
-        new ExtensionConfiguration();
+        GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
 
         $mock = $this->createMock(Typo3ExtensionConfiguration::class);
         $mock->method('get')->with('nr_mcp_agent')->willReturn([
@@ -244,7 +244,7 @@ class ExtensionConfigurationTest extends TestCase
     public function nonScalarConfigValueFallsBackToDefault(): void
     {
         // Consume the setUp mock first
-        new ExtensionConfiguration();
+        GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
 
         $mock = $this->createMock(Typo3ExtensionConfiguration::class);
         $mock->method('get')->with('nr_mcp_agent')->willReturn([

@@ -204,6 +204,7 @@ class ChatWorkerCommandExecuteTest extends TestCase
         try {
             $command->run($input, $output);
         } catch (RuntimeException) {
+            // expected break
         }
 
         self::assertStringContainsString('worker', strtolower($output->fetch()));

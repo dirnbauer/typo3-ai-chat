@@ -39,7 +39,7 @@ final readonly class McpConnectionChecker
     public function check(array $server): ?string
     {
         $uidRaw = $server['uid'] ?? 0;
-        $uid = is_int($uidRaw) ? $uidRaw : (is_string($uidRaw) || is_float($uidRaw) ? (int) $uidRaw : 0);
+        $uid = $this->toUid($uidRaw);
         $transport = is_string($server['transport'] ?? null) ? $server['transport'] : 'stdio';
 
         if ($transport !== 'stdio') {
@@ -68,5 +68,13 @@ final readonly class McpConnectionChecker
             $this->serverRepository->updateConnectionStatus($uid, 'error', $e->getMessage());
             return $e->getMessage();
         }
+    }
+
+    private function toUid(mixed $value): int
+    {
+        if (is_int($value)) {
+            return $value;
+        }
+        return is_string($value) || is_float($value) ? (int) $value : 0;
     }
 }

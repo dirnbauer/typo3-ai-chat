@@ -26,7 +26,8 @@ readonly class McpServerRepository
     public function findAllActive(): array
     {
         $qb = $this->connectionPool->getQueryBuilderForTable(self::TABLE);
-        $rows = $qb->select('*')
+
+        return $qb->select('*')
             ->from(self::TABLE)
             ->where(
                 $qb->expr()->eq('hidden', $qb->createNamedParameter(0, Connection::PARAM_INT)),
@@ -35,9 +36,6 @@ readonly class McpServerRepository
             ->orderBy('sorting', 'ASC')
             ->executeQuery()
             ->fetchAllAssociative();
-
-        /** @var list<array<string, mixed>> $rows */
-        return $rows;
     }
 
     /**

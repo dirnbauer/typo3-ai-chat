@@ -870,8 +870,8 @@ export class AiChatPanel extends LitElement {
             handle.removeEventListener('pointermove', onMove);
             handle.removeEventListener('pointerup', onEnd);
             handle.removeEventListener('pointercancel', onEnd);
-            this._posX = parseFloat(this.style.left) || 0;
-            this._posY = parseFloat(this.style.top) || 0;
+            this._posX = Number.parseFloat(this.style.left) || 0;
+            this._posY = Number.parseFloat(this.style.top) || 0;
             this._saveState();
         };
 
@@ -918,8 +918,8 @@ export class AiChatPanel extends LitElement {
             grip.removeEventListener('pointerup', onEnd);
             grip.removeEventListener('pointercancel', onEnd);
 
-            const w = parseFloat(this.style.width) || this._width;
-            const h = parseFloat(this.style.height) || this._height;
+            const w = Number.parseFloat(this.style.width) || this._width;
+            const h = Number.parseFloat(this.style.height) || this._height;
             this._width = w;
             if (h < 50) {
                 this._height = COLLAPSED_HEIGHT;
@@ -1153,7 +1153,7 @@ export class AiChatPanel extends LitElement {
                         <button class="btn-icon btn-sm" @click=${(e) => { e.stopPropagation(); this.chat.handleTogglePin(); }}
                                 title="${c.pinned ? lll('conversations.unpin') : lll('conversations.pin')}"
                                 aria-label="${c.pinned ? lll('conversations.unpin') : lll('conversations.pin')}">
-                            ${c.pinned ? '\u{1F4CC}' : '\u{1F4CC}'}
+                            ${'\u{1F4CC}'}
                         </button>
                         <button class="btn-icon btn-sm" @click=${(e) => { e.stopPropagation(); this.chat.handleArchive(); }}
                                 title="${lll('conversations.archive')}" aria-label="${lll('conversations.archive')}">
@@ -1300,8 +1300,12 @@ export class AiChatPanel extends LitElement {
         // User + assistant — avatar row with timestamp
         const isUser = role === 'user';
         const time = this.chat.formatTime(msg.createdAt);
+        const fileIcon = msg.fileMimeType?.startsWith('image/') ? '\u{1F5BC}\uFE0F' : '\u{1F4C4}';
+        const fileBadge = msg.fileUid
+            ? html`<div class="message-file-badge">${fileIcon} ${msg.fileName || lll('attachment.file')}</div>`
+            : nothing;
         const bubbleContent = isUser
-            ? html`${msg.fileUid ? html`<div class="message-file-badge">${msg.fileMimeType?.startsWith('image/') ? '\u{1F5BC}\uFE0F' : '\u{1F4C4}'} ${msg.fileName || lll('attachment.file')}</div>` : nothing}${this.chat.renderMessageContent(msg)}`
+            ? html`${fileBadge}${this.chat.renderMessageContent(msg)}`
             : unsafeHTML(this.chat.renderMessageContent(msg));
 
         return html`
@@ -1342,7 +1346,7 @@ export class AiChatPanel extends LitElement {
             <div class="attach-menu-wrap">
                 <button class="btn-icon"
                         ?disabled=${!canAttach}
-                        title="${!canAttach ? lll('attachment.limitReached') : lll('attachment.attach')}"
+                        title="${canAttach ? lll('attachment.attach') : lll('attachment.limitReached')}"
                         aria-label="${lll('attachment.attach')}"
                         aria-expanded="${String(this._attachMenuOpen)}"
                         aria-haspopup="menu"

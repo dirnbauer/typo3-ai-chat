@@ -8,28 +8,32 @@
 # Template: https://github.com/netresearch/nr-llm
 #
 
-trap 'cleanUp;exit 2' SIGINT
+readonly DOCKER_CMD='docker'
 
-cleanUp() {
-    if [ -n "${NETWORK:-}" ] && [ -n "${CONTAINER_BIN:-}" ]; then
+trap 'clean_up;exit 2' SIGINT
+
+clean_up() {
+    if [[ -n "${NETWORK:-}" ]] && [[ -n "${CONTAINER_BIN:-}" ]]; then
         ATTACHED_CONTAINERS=$(${CONTAINER_BIN} ps --filter network=${NETWORK} --format='{{.Names}}' 2>/dev/null)
         for ATTACHED_CONTAINER in ${ATTACHED_CONTAINERS}; do
             ${CONTAINER_BIN} rm -f ${ATTACHED_CONTAINER} >/dev/null 2>&1
         done
         ${CONTAINER_BIN} network rm ${NETWORK} >/dev/null 2>&1
     fi
+    return 0
 }
 
-cleanCacheFiles() {
+clean_cache_files() {
     echo -n "Clean caches ... "
     rm -rf \
         .Build/.cache \
         .Build/cache \
         .php-cs-fixer.cache
     echo "done"
+    return 0
 }
 
-loadHelp() {
+load_help() {
     read -r -d '' HELP <<EOF
 nr_mcp_agent - TYPO3 Extension Test Runner
 Execute tests in Docker containers using TYPO3 core-testing images.
@@ -76,10 +80,11 @@ Examples:
     # Run mutation tests
     ./Build/Scripts/runTests.sh -s mutation
 EOF
+    return 0
 }
 
 # Check container runtime
-if ! type "docker" >/dev/null 2>&1 && ! type "podman" >/dev/null 2>&1; then
+if ! type "${DOCKER_CMD}" >/dev/null 2>&1 && ! type "podman" >/dev/null 2>&1; then
     echo "This script requires docker or podman." >&2
     exit 1
 fi
@@ -105,9 +110,10 @@ while getopts "s:b:p:xy:nhu" OPT; do
         x) PHP_XDEBUG_ON=1 ;;
         y) PHP_XDEBUG_PORT=${OPTARG} ;;
         n) CGLCHECK_DRY_RUN=1 ;;
-        h) loadHelp; echo "${HELP}"; exit 0 ;;
+        h) load_help; echo "${HELP}"; exit 0 ;;
         u) TEST_SUITE=update ;;
         \?) exit 1 ;;
+        *) exit 1 ;;
     esac
 done
 
@@ -116,7 +122,7 @@ COMPOSER_ROOT_VERSION="dev-main"
 
 HOST_UID=$(id -u)
 USERSET=""
-if [ $(uname) != "Darwin" ]; then
+if [[ "$(uname)" != "Darwin" ]]; then
     USERSET="--user $HOST_UID"
 fi
 
@@ -135,7 +141,7 @@ TYPO3_IMAGE_PREFIX="ghcr.io/typo3/"
 CONTAINER_INTERACTIVE="-it --init"
 
 IS_CORE_CI=0
-if [ "${CI}" == "true" ] || ! [ -t 0 ]; then
+if [[ "${CI}" == "true" ]] || ! [[ -t 0 ]]; then
     IS_CORE_CI=1
     IMAGE_PREFIX=""
     CONTAINER_INTERACTIVE=""
@@ -145,8 +151,8 @@ fi
 if [[ -z "${CONTAINER_BIN}" ]]; then
     if type "podman" >/dev/null 2>&1; then
         CONTAINER_BIN="podman"
-    elif type "docker" >/dev/null 2>&1; then
-        CONTAINER_BIN="docker"
+    elif type "${DOCKER_CMD}" >/dev/null 2>&1; then
+        CONTAINER_BIN="${DOCKER_CMD}"
     fi
 fi
 
@@ -163,14 +169,14 @@ if ! ${CONTAINER_BIN} network create ${NETWORK} >/dev/null 2>&1; then
     exit 1
 fi
 
-if [ ${CONTAINER_BIN} = "docker" ]; then
+if [[ "${CONTAINER_BIN}" = "${DOCKER_CMD}" ]]; then
     CONTAINER_COMMON_PARAMS="${CONTAINER_INTERACTIVE} --rm --network ${NETWORK} --add-host "${CONTAINER_HOST}:host-gateway" ${USERSET} -v ${ROOT_DIR}:${ROOT_DIR} -w ${ROOT_DIR}"
 else
     CONTAINER_HOST="host.containers.internal"
     CONTAINER_COMMON_PARAMS="${CONTAINER_INTERACTIVE} ${CI_PARAMS} --rm --network ${NETWORK} -v ${ROOT_DIR}:${ROOT_DIR} -w ${ROOT_DIR}"
 fi
 
-if [ ${PHP_XDEBUG_ON} -eq 0 ]; then
+if [[ ${PHP_XDEBUG_ON} -eq 0 ]]; then
     XDEBUG_MODE="-e XDEBUG_MODE=off"
     XDEBUG_CONFIG=" "
 else
@@ -189,7 +195,7 @@ case ${TEST_SUITE} in
         SUITE_EXIT_CODE=$?
         ;;
     cgl)
-        if [ "${CGLCHECK_DRY_RUN}" -eq 1 ]; then
+        if [[ "${CGLCHECK_DRY_RUN}" -eq 1 ]]; then
             COMMAND="php ${PHP_OPCACHE_OPTS} -dxdebug.mode=off .Build/bin/php-cs-fixer fix -v --dry-run --diff"
         else
             COMMAND="php ${PHP_OPCACHE_OPTS} -dxdebug.mode=off .Build/bin/php-cs-fixer fix -v"
@@ -198,7 +204,7 @@ case ${TEST_SUITE} in
         SUITE_EXIT_CODE=$?
         ;;
     clean)
-        cleanCacheFiles
+        clean_cache_files
         SUITE_EXIT_CODE=0
         ;;
     composer)
@@ -228,7 +234,7 @@ case ${TEST_SUITE} in
         SUITE_EXIT_CODE=$?
         ;;
     rector)
-        if [ "${CGLCHECK_DRY_RUN}" -eq 1 ]; then
+        if [[ "${CGLCHECK_DRY_RUN}" -eq 1 ]]; then
             COMMAND="php ${PHP_OPCACHE_OPTS} -dxdebug.mode=off .Build/bin/rector process --config Build/rector/rector.php --dry-run"
         else
             COMMAND="php ${PHP_OPCACHE_OPTS} -dxdebug.mode=off .Build/bin/rector process --config Build/rector/rector.php"
@@ -253,14 +259,14 @@ case ${TEST_SUITE} in
         SUITE_EXIT_CODE=$?
         ;;
     *)
-        loadHelp
+        load_help
         echo "Invalid -s option: ${TEST_SUITE}" >&2
         echo "${HELP}" >&2
         exit 1
         ;;
 esac
 
-cleanUp
+clean_up
 
 # Print summary
 echo "" >&2

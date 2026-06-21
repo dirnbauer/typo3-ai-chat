@@ -11,13 +11,17 @@ require_once __DIR__ . '/../../../.Build/vendor/autoload.php';
 
 $dir = __DIR__;
 
+const CORRUPT_BYTES = "\x00\xFF\xAB\x12";
+const PDF_XREF_ENTRY_SUFFIX = " 00000 n \n";
+const PDF_OFFSET_FORMAT = '%010d';
+
 // sample.txt
 file_put_contents($dir . '/sample.txt', 'Hello TXT');
 
 // corrupt files — invalid bytes
-file_put_contents($dir . '/corrupt.pdf', str_repeat("\x00\xFF\xAB\x12", 5));
-file_put_contents($dir . '/corrupt.docx', str_repeat("\x00\xFF\xAB\x12", 5));
-file_put_contents($dir . '/corrupt.xlsx', str_repeat("\x00\xFF\xAB\x12", 5));
+file_put_contents($dir . '/corrupt.pdf', str_repeat(CORRUPT_BYTES, 5));
+file_put_contents($dir . '/corrupt.docx', str_repeat(CORRUPT_BYTES, 5));
+file_put_contents($dir . '/corrupt.xlsx', str_repeat(CORRUPT_BYTES, 5));
 
 // sample.pdf — minimal valid PDF with "Hello PDF" text
 // Xref offsets are computed dynamically so the table is always correct.
@@ -36,11 +40,11 @@ $pdfOff5 = $pdfOff4 + strlen($pdfObj4);
 $pdfXrefOffset = $pdfOff5 + strlen($pdfObj5);
 $pdfXref = "xref\n0 6\n"
     . "0000000000 65535 f \n"
-    . sprintf('%010d', $pdfOff1) . " 00000 n \n"
-    . sprintf('%010d', $pdfOff2) . " 00000 n \n"
-    . sprintf('%010d', $pdfOff3) . " 00000 n \n"
-    . sprintf('%010d', $pdfOff4) . " 00000 n \n"
-    . sprintf('%010d', $pdfOff5) . " 00000 n \n";
+    . sprintf(PDF_OFFSET_FORMAT, $pdfOff1) . PDF_XREF_ENTRY_SUFFIX
+    . sprintf(PDF_OFFSET_FORMAT, $pdfOff2) . PDF_XREF_ENTRY_SUFFIX
+    . sprintf(PDF_OFFSET_FORMAT, $pdfOff3) . PDF_XREF_ENTRY_SUFFIX
+    . sprintf(PDF_OFFSET_FORMAT, $pdfOff4) . PDF_XREF_ENTRY_SUFFIX
+    . sprintf(PDF_OFFSET_FORMAT, $pdfOff5) . PDF_XREF_ENTRY_SUFFIX;
 $pdfTrailer = "trailer\n<</Size 6 /Root 1 0 R>>\nstartxref\n" . $pdfXrefOffset . "\n%%EOF\n";
 $pdfContent = $pdfHeader . $pdfObj1 . $pdfObj2 . $pdfObj3 . $pdfObj4 . $pdfObj5 . $pdfXref . $pdfTrailer;
 file_put_contents($dir . '/sample.pdf', $pdfContent);

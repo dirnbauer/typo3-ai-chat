@@ -18,7 +18,10 @@ final readonly class ChatToolbarItem implements ToolbarItemInterface, RequestAwa
         private PageRenderer $pageRenderer,
     ) {}
 
-    public function setRequest(ServerRequestInterface $request): void {}
+    public function setRequest(ServerRequestInterface $request): void
+    {
+        // Interface-required no-op: this toolbar item does not use the server request
+    }
 
     public function checkAccess(): bool
     {
@@ -37,6 +40,14 @@ final readonly class ChatToolbarItem implements ToolbarItemInterface, RequestAwa
         if ($beUser->isAdmin()) {
             return true;
         }
+        return $this->userIsInAllowedGroup($beUser, $allowed);
+    }
+
+    /**
+     * @param list<int> $allowed
+     */
+    private function userIsInAllowedGroup(BackendUserAuthentication $beUser, array $allowed): bool
+    {
         $usergroup = $beUser->user['usergroup'] ?? null;
         $userGroups = array_map(intval(...), explode(',', is_string($usergroup) ? $usergroup : ''));
         return array_intersect($allowed, $userGroups) !== [];

@@ -9,7 +9,7 @@ declare(strict_types=1);
  * - Initialises ORIGINAL_ROOT and temp dirs (needed by functional tests).
  */
 
-require __DIR__ . '/../../.Build/vendor/autoload.php';
+require_once __DIR__ . '/../../.Build/vendor/autoload.php';
 
 (static function () {
     $testbase = new \TYPO3\TestingFramework\Core\Testbase();

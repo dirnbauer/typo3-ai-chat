@@ -28,6 +28,9 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 final readonly class ChatApiController
 {
+    private const ERROR_FILE_NOT_FOUND = 'File not found';
+    private const ERROR_CONVERSATION_PROCESSING = 'Conversation is already processing';
+
     public function __construct(
         private ConversationRepository $repository,
         private ChatProcessorInterface $processor,
@@ -193,19 +196,19 @@ final readonly class ChatApiController
             try {
                 $file = $this->resourceFactory->getFileObject($fileUid);
                 if (!$file->checkActionPermission('read')) {
-                    return new JsonResponse(['error' => 'File not found'], 404);
+                    return new JsonResponse(['error' => self::ERROR_FILE_NOT_FOUND], 404);
                 }
                 $fileName = $file->getName();
                 $fileMimeType = $file->getMimeType();
             } catch (Exception) {
-                return new JsonResponse(['error' => 'File not found'], 404);
+                return new JsonResponse(['error' => self::ERROR_FILE_NOT_FOUND], 404);
             }
         }
 
         $currentStatus = $conversation->getStatus();
         if (in_array($currentStatus, [ConversationStatus::Processing, ConversationStatus::Locked, ConversationStatus::ToolLoop], true)
         ) {
-            return new JsonResponse(['error' => 'Conversation is already processing'], 409);
+            return new JsonResponse(['error' => self::ERROR_CONVERSATION_PROCESSING], 409);
         }
 
         $maxActive = $this->config->getMaxActiveConversationsPerUser();
@@ -241,7 +244,7 @@ final readonly class ChatApiController
         // preventing race conditions with concurrent requests or worker dequeue.
         $claimed = $this->repository->updateIf($conversation, $currentStatus);
         if (!$claimed) {
-            return new JsonResponse(['error' => 'Conversation is already processing'], 409);
+            return new JsonResponse(['error' => self::ERROR_CONVERSATION_PROCESSING], 409);
         }
 
         $this->processor->dispatch($conversation->getUid());
@@ -355,7 +358,7 @@ final readonly class ChatApiController
         try {
             $file = $this->resourceFactory->getFileObject((int) $rawUid);
         } catch (Exception) {
-            return new JsonResponse(['error' => 'File not found'], 404);
+            return new JsonResponse(['error' => self::ERROR_FILE_NOT_FOUND], 404);
         }
 
         if (!$file->checkActionPermission('read')) {
@@ -401,7 +404,7 @@ final readonly class ChatApiController
         // Atomic CAS: write full row only if status still matches.
         $claimed = $this->repository->updateIf($conversation, $currentStatus);
         if (!$claimed) {
-            return new JsonResponse(['error' => 'Conversation is already processing'], 409);
+            return new JsonResponse(['error' => self::ERROR_CONVERSATION_PROCESSING], 409);
         }
 
         $this->processor->dispatch($conversation->getUid());

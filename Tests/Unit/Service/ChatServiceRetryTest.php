@@ -16,11 +16,11 @@ use Netresearch\NrMcpAgent\Domain\Repository\ConversationRepository;
 use Netresearch\NrMcpAgent\Domain\Repository\LlmTaskRepository;
 use Netresearch\NrMcpAgent\Enum\ConversationStatus;
 use Netresearch\NrMcpAgent\Enum\MessageRole;
+use Netresearch\NrMcpAgent\Exception\ChatException;
 use Netresearch\NrMcpAgent\Mcp\McpToolProviderInterface;
 use Netresearch\NrMcpAgent\Service\ChatService;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
-use RuntimeException;
 use stdClass;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
 use TYPO3\CMS\Core\Site\SiteFinder;
@@ -61,7 +61,7 @@ class ChatServiceRetryTest extends TestCase
         $provider->method('chatCompletion')->willReturnCallback(function () use (&$callCount) {
             $callCount++;
             if ($callCount === 1) {
-                throw new RuntimeException('429 Too Many Requests');
+                throw new ChatException('429 Too Many Requests');
             }
             return new CompletionResponse(
                 content: 'Hi!',
@@ -91,7 +91,7 @@ class ChatServiceRetryTest extends TestCase
 
         $provider = $this->createMock(ProviderInterface::class);
         $provider->method('chatCompletion')->willThrowException(
-            new RuntimeException('Invalid API key'),
+            new ChatException('Invalid API key'),
         );
 
         $GLOBALS['BE_USER'] = new stdClass();
@@ -114,7 +114,7 @@ class ChatServiceRetryTest extends TestCase
 
         $provider = $this->createMock(ProviderInterface::class);
         $provider->method('chatCompletion')->willThrowException(
-            new RuntimeException('Error calling https://api.anthropic.com/v1/messages with Bearer sk-ant-api03-secretkey123: 500'),
+            new ChatException('Error calling https://api.anthropic.com/v1/messages with Bearer sk-ant-api03-secretkey123: 500'),
         );
 
         $GLOBALS['BE_USER'] = new stdClass();
@@ -142,7 +142,7 @@ class ChatServiceRetryTest extends TestCase
         $provider->method('chatCompletion')->willReturnCallback(function () use (&$callCount) {
             $callCount++;
             if ($callCount === 1) {
-                throw new RuntimeException('The server is overloaded');
+                throw new ChatException('The server is overloaded');
             }
             return new CompletionResponse(
                 content: 'Hi!',
@@ -175,7 +175,7 @@ class ChatServiceRetryTest extends TestCase
         $provider->method('chatCompletion')->willReturnCallback(function () use (&$callCount) {
             $callCount++;
             if ($callCount === 1) {
-                throw new RuntimeException('503 Service Unavailable');
+                throw new ChatException('503 Service Unavailable');
             }
             return new CompletionResponse(
                 content: 'Hi!',
@@ -207,7 +207,7 @@ class ChatServiceRetryTest extends TestCase
         $provider = $this->createMock(ProviderInterface::class);
         $provider->method('chatCompletion')->willReturnCallback(function () use (&$callCount) {
             $callCount++;
-            throw new RuntimeException('429 Too Many Requests');
+            throw new ChatException('429 Too Many Requests');
         });
 
         $GLOBALS['BE_USER'] = new stdClass();
@@ -232,7 +232,7 @@ class ChatServiceRetryTest extends TestCase
 
         $provider = $this->createMock(ProviderInterface::class);
         $provider->method('chatCompletion')->willThrowException(
-            new RuntimeException('Error with key-abc123def456 token'),
+            new ChatException('Error with key-abc123def456 token'),
         );
 
         $GLOBALS['BE_USER'] = new stdClass();
@@ -256,7 +256,7 @@ class ChatServiceRetryTest extends TestCase
 
         $longError = str_repeat('a', 600);
         $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willThrowException(new RuntimeException($longError));
+        $provider->method('chatCompletion')->willThrowException(new ChatException($longError));
 
         $GLOBALS['BE_USER'] = new stdClass();
         $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
@@ -287,7 +287,7 @@ class ChatServiceRetryTest extends TestCase
         $provider->method('chatCompletion')->willReturnCallback(function () use (&$callCount) {
             $callCount++;
             if ($callCount === 1) {
-                throw new RuntimeException('rate limit exceeded');
+                throw new ChatException('rate limit exceeded');
             }
             return new CompletionResponse(content: 'ok', model: 'test', usage: new UsageStatistics(1, 2, 3));
         });
@@ -316,7 +316,7 @@ class ChatServiceRetryTest extends TestCase
         $provider = $this->createMock(ProviderInterface::class);
         $provider->method('chatCompletion')->willReturnCallback(function () use (&$callCount) {
             $callCount++;
-            throw new RuntimeException('api error');
+            throw new ChatException('api error');
         });
 
         $GLOBALS['BE_USER'] = new stdClass();
@@ -343,7 +343,7 @@ class ChatServiceRetryTest extends TestCase
         $provider = $this->createMock(ProviderInterface::class);
         $provider->method('chatCompletion')->willReturnCallback(function () use (&$callCount) {
             $callCount++;
-            throw new RuntimeException('503 Service Unavailable');
+            throw new ChatException('503 Service Unavailable');
         });
 
         $GLOBALS['BE_USER'] = new stdClass();

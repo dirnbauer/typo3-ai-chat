@@ -91,7 +91,10 @@ readonly class ConversationRepository
             )
             ->executeQuery()
             ->fetchOne();
-        return is_int($fetchResult) ? $fetchResult : (is_string($fetchResult) ? (int) $fetchResult : 0);
+        if (is_int($fetchResult)) {
+            return $fetchResult;
+        }
+        return is_string($fetchResult) ? (int) $fetchResult : 0;
     }
 
     public function add(Conversation $conversation): int
@@ -186,9 +189,15 @@ readonly class ConversationRepository
         $messageCount = $row['message_count'] ?? 0;
         $errorMessage = $row['error_message'] ?? '';
 
+        if (is_int($messageCount)) {
+            $messageCountInt = $messageCount;
+        } else {
+            $messageCountInt = is_string($messageCount) ? (int) $messageCount : 0;
+        }
+
         return [
             'status' => is_string($status) ? $status : '',
-            'message_count' => is_int($messageCount) ? $messageCount : (int) (is_string($messageCount) ? $messageCount : 0),
+            'message_count' => $messageCountInt,
             'error_message' => is_string($errorMessage) ? $errorMessage : '',
         ];
     }

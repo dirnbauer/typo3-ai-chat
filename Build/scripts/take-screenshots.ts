@@ -22,8 +22,8 @@
  */
 
 import { chromium, Page, FrameLocator } from 'playwright';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const BASE_URL   = process.env.TYPO3_BASE_URL     || 'https://v14.nr-mcp-agent.ddev.site:33001';
 const USER       = process.env.TYPO3_ADMIN_USER    || 'admin';
@@ -381,7 +381,9 @@ async function main(): Promise<void> {
     }
 }
 
-main().catch((err) => {
+try {
+    await main();
+} catch (err) {
     console.error('\n✗ Screenshot generation failed:', err);
     process.exit(1);
-});
+}

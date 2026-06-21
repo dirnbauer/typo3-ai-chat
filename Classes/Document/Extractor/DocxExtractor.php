@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Netresearch\NrMcpAgent\Document\Extractor;
 
 use Netresearch\NrMcpAgent\Document\DocumentExtractorInterface;
+use Netresearch\NrMcpAgent\Exception\DocumentExtractionException;
 use PhpOffice\PhpWord\Element\AbstractElement;
 use PhpOffice\PhpWord\Element\Section;
 use PhpOffice\PhpWord\Element\Text;
 use PhpOffice\PhpWord\Element\TextRun;
 use PhpOffice\PhpWord\IOFactory;
 use PhpOffice\PhpWord\PhpWord;
-use RuntimeException;
 use Throwable;
 
 final class DocxExtractor implements DocumentExtractorInterface
@@ -39,7 +39,7 @@ final class DocxExtractor implements DocumentExtractorInterface
         try {
             IOFactory::load($path);
         } catch (Throwable $e) {
-            throw new RuntimeException('DOCX validation failed: ' . $e->getMessage(), 1743000040, $e);
+            throw new DocumentExtractionException('DOCX validation failed: ' . $e->getMessage(), 1743000040, $e);
         } finally {
             error_reporting($prev);
         }
@@ -52,7 +52,7 @@ final class DocxExtractor implements DocumentExtractorInterface
             $phpWord = IOFactory::load($path);
             return $this->extractText($phpWord);
         } catch (Throwable $e) {
-            throw new RuntimeException('DOCX extraction failed: ' . $e->getMessage(), 1743000041, $e);
+            throw new DocumentExtractionException('DOCX extraction failed: ' . $e->getMessage(), 1743000041, $e);
         } finally {
             error_reporting($prev);
         }

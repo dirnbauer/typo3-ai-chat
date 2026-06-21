@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Netresearch\NrMcpAgent\Document\Extractor;
 
 use Netresearch\NrMcpAgent\Document\DocumentExtractorInterface;
+use Netresearch\NrMcpAgent\Exception\DocumentExtractionException;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use RuntimeException;
 use Throwable;
 
 final class XlsxExtractor implements DocumentExtractorInterface
@@ -32,7 +32,7 @@ final class XlsxExtractor implements DocumentExtractorInterface
         try {
             IOFactory::load($path);
         } catch (Throwable $e) {
-            throw new RuntimeException('XLSX validation failed: ' . $e->getMessage(), 1743000050, $e);
+            throw new DocumentExtractionException('XLSX validation failed: ' . $e->getMessage(), 1743000050, $e);
         }
     }
 
@@ -60,7 +60,7 @@ final class XlsxExtractor implements DocumentExtractorInterface
             }
             return trim(implode("\n", $parts));
         } catch (Throwable $e) {
-            throw new RuntimeException('XLSX extraction failed: ' . $e->getMessage(), 1743000051, $e);
+            throw new DocumentExtractionException('XLSX extraction failed: ' . $e->getMessage(), 1743000051, $e);
         }
     }
 }

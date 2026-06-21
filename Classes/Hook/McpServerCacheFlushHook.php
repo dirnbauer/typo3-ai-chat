@@ -56,7 +56,11 @@ final class McpServerCacheFlushHook
 
         // Resolve real UID — new records use a temporary string ID until after the save
         $resolvedId = is_int($id) ? $id : ($dataHandler->substNEWwithIDs[$id] ?? 0);
-        $uid = is_int($resolvedId) ? $resolvedId : (is_string($resolvedId) || is_float($resolvedId) ? (int) $resolvedId : 0);
+        if (is_int($resolvedId)) {
+            $uid = $resolvedId;
+        } else {
+            $uid = is_string($resolvedId) || is_float($resolvedId) ? (int) $resolvedId : 0;
+        }
         if ($uid === 0) {
             return;
         }

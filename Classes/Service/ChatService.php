@@ -20,9 +20,9 @@ use Netresearch\NrMcpAgent\Domain\Repository\ConversationRepository;
 use Netresearch\NrMcpAgent\Domain\Repository\LlmTaskRepository;
 use Netresearch\NrMcpAgent\Enum\ConversationStatus;
 use Netresearch\NrMcpAgent\Enum\MessageRole;
+use Netresearch\NrMcpAgent\Exception\ChatException;
 use Netresearch\NrMcpAgent\Mcp\McpToolProviderInterface;
 use Netresearch\NrMcpAgent\Utility\ErrorMessageSanitizer;
-use RuntimeException;
 use Throwable;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
 use TYPO3\CMS\Core\Site\SiteFinder;
@@ -196,7 +196,7 @@ final class ChatService implements ChatCapabilitiesInterface
 
         $provider = $this->resolveProvider();
         if (!$provider instanceof ToolCapableInterface) {
-            throw new RuntimeException(sprintf(
+            throw new ChatException(sprintf(
                 'Provider "%s" does not support tool calling',
                 $provider->getIdentifier(),
             ));
@@ -394,7 +394,11 @@ final class ChatService implements ChatCapabilitiesInterface
             }
 
             try {
-                $fileUid = is_int($msg['fileUid']) ? $msg['fileUid'] : (is_numeric($msg['fileUid']) ? (int) $msg['fileUid'] : 0);
+                if (is_int($msg['fileUid'])) {
+                    $fileUid = $msg['fileUid'];
+                } else {
+                    $fileUid = is_numeric($msg['fileUid']) ? (int) $msg['fileUid'] : 0;
+                }
                 $file = $this->resourceFactory->getFileObject($fileUid);
                 $localPath = $file->getForLocalProcessing(false);
                 $base64 = base64_encode((string) file_get_contents($localPath));
@@ -421,7 +425,7 @@ final class ChatService implements ChatCapabilitiesInterface
 
     /**
      * @return array<string, mixed>
-     * @throws RuntimeException if the file type is not supported by the provider or any extractor
+     * @throws ChatException if the file type is not supported by the provider or any extractor
      */
     private function buildFileContentBlock(
         string $mimeType,
@@ -449,7 +453,7 @@ final class ChatService implements ChatCapabilitiesInterface
                     . ($text !== '' ? $text : '[File contained no extractable text]'),
             ];
         }
-        throw new RuntimeException(
+        throw new ChatException(
             'Provider "' . $provider->getIdentifier() . '" does not support document uploads (mime type: ' . $mimeType . ')',
             1742320000,
         );
@@ -543,6 +547,7 @@ final class ChatService implements ChatCapabilitiesInterface
                     $locale = $language->getLocale();
                     $isoCode = method_exists($locale, 'getLanguageCode') ? strtolower($locale->getLanguageCode()) : '';
                 } catch (Throwable) {
+                    // Locale resolution failed — fall back to hreflang below
                 }
 
                 if ($isoCode === '') {

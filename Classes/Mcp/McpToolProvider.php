@@ -6,8 +6,8 @@ namespace Netresearch\NrMcpAgent\Mcp;
 
 use Netresearch\NrMcpAgent\Configuration\ExtensionConfiguration;
 use Netresearch\NrMcpAgent\Domain\Repository\McpServerRepository;
+use Netresearch\NrMcpAgent\Exception\McpException;
 use Psr\Log\LoggerInterface;
-use RuntimeException;
 use stdClass;
 use Throwable;
 use TYPO3\CMS\Core\Cache\Frontend\FrontendInterface;
@@ -67,8 +67,7 @@ final class McpToolProvider implements McpToolProviderInterface
                 continue;
             }
 
-            $uidRaw = $server['uid'] ?? 0;
-            $uid = is_int($uidRaw) ? $uidRaw : (is_string($uidRaw) || is_float($uidRaw) ? (int) $uidRaw : 0);
+            $uid = $this->toUid($server['uid'] ?? 0);
             $cacheKey = $this->buildCacheKey($server);
 
             /** @var list<array{type: string, function: array{name: string, description: string, parameters: array<string, mixed>}}>|false $cached */
@@ -159,9 +158,8 @@ final class McpToolProvider implements McpToolProviderInterface
 
             try {
                 $this->connections[$serverKey] = $this->openConnection($server);
-                $uidRaw = $server['uid'] ?? 0;
                 $this->serverRepository->updateConnectionStatus(
-                    is_int($uidRaw) ? $uidRaw : (is_string($uidRaw) || is_float($uidRaw) ? (int) $uidRaw : 0),
+                    $this->toUid($server['uid'] ?? 0),
                     'ok',
                 );
             } catch (Throwable $e) {
@@ -228,7 +226,7 @@ final class McpToolProvider implements McpToolProviderInterface
 
         if ($transport === 'sse') {
             // SSE transport is not yet implemented in McpConnection
-            throw new RuntimeException('SSE transport is not yet supported');
+            throw new McpException('SSE transport is not yet supported');
         }
 
         $command = is_string($server['command'] ?? null) ? $server['command'] : '';
@@ -295,5 +293,13 @@ final class McpToolProvider implements McpToolProviderInterface
         }
 
         return $schema;
+    }
+
+    private function toUid(mixed $value): int
+    {
+        if (is_int($value)) {
+            return $value;
+        }
+        return is_string($value) || is_float($value) ? (int) $value : 0;
     }
 }
