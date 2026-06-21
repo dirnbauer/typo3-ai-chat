@@ -5,8 +5,7 @@ on:
     branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: pages
@@ -16,6 +15,8 @@ jobs:
   build:
     name: Render documentation
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
