@@ -322,7 +322,7 @@ class McpToolProviderTest extends TestCase
         $config->method('isMcpEnabled')->willReturn(true);
 
         $provider = new McpToolProvider($config, $serverRepo, $cache, new NullLogger());
-        $tools = $provider->getToolDefinitions();
+        $provider->getToolDefinitions();
 
         // Default server was loaded; getActiveServers returns it
         self::assertCount(1, $provider->getActiveServers());

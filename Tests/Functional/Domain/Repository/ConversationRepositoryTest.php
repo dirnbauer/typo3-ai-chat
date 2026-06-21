@@ -12,6 +12,8 @@ use TYPO3\TestingFramework\Core\Functional\FunctionalTestCase;
 
 class ConversationRepositoryTest extends FunctionalTestCase
 {
+    private const CONV_1_TITLE = self::CONV_1_TITLE;
+
     protected array $testExtensionsToLoad = [
         'netresearch/nr-vault',
         'netresearch/nr-llm',
@@ -33,7 +35,7 @@ class ConversationRepositoryTest extends FunctionalTestCase
     {
         $conversation = $this->subject->findByUid(1);
         self::assertInstanceOf(Conversation::class, $conversation);
-        self::assertSame('Conv 1', $conversation->getTitle());
+        self::assertSame(self::CONV_1_TITLE, $conversation->getTitle());
     }
 
     #[Test]
@@ -113,7 +115,7 @@ class ConversationRepositoryTest extends FunctionalTestCase
         $reloaded = $this->subject->findByUid(1);
         self::assertSame(ConversationStatus::Processing, $reloaded->getStatus());
         // Title must be unchanged
-        self::assertSame('Conv 1', $reloaded->getTitle());
+        self::assertSame(self::CONV_1_TITLE, $reloaded->getTitle());
     }
 
     #[Test]
@@ -175,7 +177,7 @@ class ConversationRepositoryTest extends FunctionalTestCase
         // Verify row is unchanged
         $reloaded = $this->subject->findByUid(1);
         self::assertNotNull($reloaded);
-        self::assertSame('Conv 1', $reloaded->getTitle());
+        self::assertSame(self::CONV_1_TITLE, $reloaded->getTitle());
         self::assertSame(ConversationStatus::Idle, $reloaded->getStatus());
     }
 
@@ -233,7 +235,7 @@ class ConversationRepositoryTest extends FunctionalTestCase
         self::assertNotNull($after);
         self::assertTrue($after->isArchived());
         // Title must remain unchanged
-        self::assertSame('Conv 1', $after->getTitle());
+        self::assertSame(self::CONV_1_TITLE, $after->getTitle());
     }
 
     #[Test]
@@ -261,7 +263,7 @@ class ConversationRepositoryTest extends FunctionalTestCase
         self::assertNotNull($after);
         self::assertTrue($after->isPinned());
         // Title must remain unchanged
-        self::assertSame('Conv 1', $after->getTitle());
+        self::assertSame(self::CONV_1_TITLE, $after->getTitle());
     }
 
     #[Test]
