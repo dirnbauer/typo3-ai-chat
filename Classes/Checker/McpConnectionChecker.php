@@ -18,7 +18,7 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
  * contexts where the DI container may not be available, so dependencies are
  * resolved internally rather than via constructor injection.
  */
-final class McpConnectionChecker
+final readonly class McpConnectionChecker
 {
     private McpServerRepository $serverRepository;
 
