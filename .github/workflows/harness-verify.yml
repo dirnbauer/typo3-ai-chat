@@ -26,7 +26,7 @@ jobs:
         run: |
           LINES=$(wc -l < AGENTS.md)
           if [ "$LINES" -gt 150 ]; then
-            echo "::error::AGENTS.md is too long ($LINES lines). It should be a compact index (<150 lines). Move detail to docs/"
+            echo "::error::AGENTS.md is too long ($LINES lines). It should be a compact index (<150 lines). Move detail to Documentation/"
             exit 1
           fi
 
@@ -74,6 +74,6 @@ jobs:
 
       - name: Verify docs structure
         run: |
-          if [ ! -f docs/ARCHITECTURE.md ]; then
-            echo "::warning::docs/ARCHITECTURE.md is missing — recommended for Level 2+ harness maturity"
+          if [ ! -f Documentation/Developer/Architecture.rst ]; then
+            echo "::warning::Documentation/Developer/Architecture.rst is missing — recommended for Level 2+ harness maturity"
           fi

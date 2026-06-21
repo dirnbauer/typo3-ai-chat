@@ -12,3 +12,4 @@ Developer information
     AgentLoop
     Commands
     Testing
+    ADR/Index

@@ -18,7 +18,6 @@ AI Chat for TYPO3 — integrates a conversational AI assistant into the TYPO3 ba
 | `Configuration/` | TYPO3 TCA, routing, services.yaml |
 | `Resources/` | Fluid templates, JS (Lit web components), CSS |
 | `Documentation/` | RST docs (rendered on docs.typo3.org) |
-| `docs/` | Architecture docs, execution plans |
 | `.github/workflows/` | CI (PHP 8.2–8.4 × TYPO3 ^13.4 matrix) |
 
 ## Commands
@@ -56,7 +55,6 @@ make ci                          # lint + phpstan + test + test-js
 - **Tests:** Run after every change — no "done" without green tests
 - **Static analysis:** PHPStan Level 10; architecture tests run automatically with PHPStan
 - **Docs:** Update `Documentation/` and `README.md` when adding features or changing config
-- **Plans:** Multi-file changes use exec-plans in `docs/exec-plans/active/`
 
 ## Constraints
 
@@ -67,8 +65,8 @@ make ci                          # lint + phpstan + test + test-js
 
 ## References
 
-- [Architecture](docs/ARCHITECTURE.md) — component map, data flow, dependency rules
-- [Active Execution Plans](docs/exec-plans/active/) — multi-file change plans
+- [Architecture](Documentation/Developer/Architecture.rst) — component map, data flow, dependency rules
+- [Architecture Decision Records](Documentation/Developer/ADR/Index.rst) — ADR-001 through ADR-014
 - [Full Documentation](Documentation/) — RST docs (docs.typo3.org)
 - [Testing Guide](Documentation/Developer/Testing.rst) — test pyramid details
 - [CI Workflow](.github/workflows/ci.yml) — matrix build configuration
