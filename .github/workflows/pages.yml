@@ -44,6 +44,11 @@ jobs:
             ghcr.io/typo3-documentation/render-guides@sha256:6080cbe815ae702e11a932924cdbcf6ec934fbdf9568931a5ed6bafc4b69959c \
             render --config=Documentation --output=.Build/docs Documentation
 
+      - name: Provide lowercase index.html for the Pages root
+        # render-guides emits Index.html (capital I); GitHub Pages serves
+        # index.html for the directory root, so copy it to avoid a 404 at /.
+        run: cp .Build/docs/Index.html .Build/docs/index.html
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5.0.0
         with:
