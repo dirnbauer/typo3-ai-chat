@@ -29,8 +29,6 @@ final class McpServerCacheFlushHook
 
     /**
      * @param string $status 'new' or 'update'
-     * @param string $table
-     * @param string|int $id
      * @param array<string, mixed> $fieldArray
      */
     public function processDatamap_afterDatabaseOperations(

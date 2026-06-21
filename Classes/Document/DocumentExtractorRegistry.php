@@ -6,10 +6,10 @@ namespace Netresearch\NrMcpAgent\Document;
 
 use RuntimeException;
 
-final class DocumentExtractorRegistry
+final readonly class DocumentExtractorRegistry
 {
     /** @var list<DocumentExtractorInterface> */
-    private readonly array $extractors;
+    private array $extractors;
 
     /** @param iterable<DocumentExtractorInterface> $extractors */
     public function __construct(iterable $extractors)
