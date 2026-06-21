@@ -12,7 +12,7 @@ use TYPO3\TestingFramework\Core\Functional\FunctionalTestCase;
 
 class ConversationRepositoryTest extends FunctionalTestCase
 {
-    private const CONV_1_TITLE = self::CONV_1_TITLE;
+    private const CONV_1_TITLE = 'Conv 1';
 
     protected array $testExtensionsToLoad = [
         'netresearch/nr-vault',
