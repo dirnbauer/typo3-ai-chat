@@ -4,89 +4,36 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
   merge_group:
+  schedule:
+    - cron: '0 6 * * 1'
 
+permissions:
+  contents: read
+
+# This workflow runs the extension's own test matrix and is the ONE per-extension
+# CI value: its `with:` block (php-versions, typo3-versions, matrix-exclude,
+# run-functional-tests, db settings, remove-dev-deps, coverage, …) differs per
+# extension. It is therefore listed under intentional-drift in
+# .github/template.yaml — customise it freely here. The security/quality jobs
+# with elevated permissions are drift-enforced in checks.yml; do not duplicate
+# them here. PHP mutation testing lives in mutation.yml (extra, not in template).
 jobs:
-  quality:
-    name: Code Quality (PHP ${{ matrix.php }})
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        php: ['8.2', '8.3', '8.4']
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240  # v2
-        with:
-          php-version: ${{ matrix.php }}
-          tools: composer:v2
-          coverage: none
-
-      - name: Install dependencies
-        run: composer install --no-interaction --prefer-dist --no-progress
-
-      - name: Code style check
-        run: composer ci:cgl
-
-      - name: PHPStan
-        run: composer ci:phpstan
-
-  tests:
-    name: Tests (PHP ${{ matrix.php }}, TYPO3 ${{ matrix.typo3 }})
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        php: ['8.2', '8.3', '8.4']
-        # TYPO3 ^14.0 is excluded until saschaegerer/phpstan-typo3 and
-        # typo3fluid/fluid release versions that support TYPO3 14.
-        typo3: ['^13.4']
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240  # v2
-        with:
-          php-version: ${{ matrix.php }}
-          tools: composer:v2
-          coverage: none
-
-      - name: Install dependencies (TYPO3 ${{ matrix.typo3 }})
-        # The lock file targets the newest supported TYPO3; this leg re-resolves
-        # the whole tree for the older branch. `require -W` cannot do that: dev
-        # deps like testing-framework and phpstan-typo3 are not dependencies of
-        # cms-core and stay locked, leaving only old, advisory-blocked 13.4.x
-        # releases as install candidates.
-        run: |
-          composer require --no-interaction --no-update typo3/cms-core:"${{ matrix.typo3 }}" typo3/cms-backend:"${{ matrix.typo3 }}"
-          composer update --no-interaction --no-progress
-
-      - name: Unit tests
-        run: composer ci:tests:unit
-
-      - name: Functional tests
-        run: composer ci:tests:functional
-
-  mutation:
-    name: Mutation Testing (PHP 8.3)
-    runs-on: ubuntu-latest
-    needs: [tests]
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240  # v2
-        with:
-          php-version: '8.3'
-          tools: composer:v2
-          coverage: xdebug
-
-      - name: Install dependencies
-        run: composer install --no-interaction --prefer-dist --no-progress
-
-      - name: Mutation testing
-        run: composer ci:mutation:ci
-
+  ci:
+    uses: netresearch/typo3-ci-workflows/.github/workflows/ci.yml@main
+    permissions:
+      contents: read
+    with:
+      php-versions: '["8.2","8.3","8.4"]'
+      # TYPO3 ^14 is excluded until saschaegerer/phpstan-typo3 and
+      # typo3fluid/fluid ship releases that support TYPO3 14.
+      typo3-versions: '["^13.4"]'
+      # This extension's tests require both cms-core and cms-backend.
+      typo3-packages: '["typo3/cms-core","typo3/cms-backend"]'
+      run-functional-tests: true
+      functional-test-db: sqlite
+      # The reusable auto-detects ci:cgl / ci:phpstan / ci:tests:unit /
+      # ci:tests:functional, but not this repo's ci:rector script name.
+      rector-command: 'composer ci:rector'
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
