@@ -28,6 +28,9 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 final readonly class ChatApiController
 {
+    private const ERROR_FILE_NOT_FOUND = 'File not found';
+    private const ERROR_CONVERSATION_PROCESSING = 'Conversation is already processing';
+
     public function __construct(
         private ConversationRepository $repository,
         private ChatProcessorInterface $processor,
@@ -185,27 +188,17 @@ final readonly class ChatApiController
         $fileMimeType = null;
 
         if ($fileUid !== null) {
-            $existingFileCount = $this->countFilesInConversation($conversation);
-            if ($existingFileCount >= 5) {
-                return new JsonResponse(['error' => 'Maximum 5 files per conversation reached'], 400);
+            $resolved = $this->resolveAttachment($conversation, $fileUid);
+            if ($resolved instanceof ResponseInterface) {
+                return $resolved;
             }
-
-            try {
-                $file = $this->resourceFactory->getFileObject($fileUid);
-                if (!$file->checkActionPermission('read')) {
-                    return new JsonResponse(['error' => 'File not found'], 404);
-                }
-                $fileName = $file->getName();
-                $fileMimeType = $file->getMimeType();
-            } catch (Exception) {
-                return new JsonResponse(['error' => 'File not found'], 404);
-            }
+            [$fileName, $fileMimeType] = $resolved;
         }
 
         $currentStatus = $conversation->getStatus();
         if (in_array($currentStatus, [ConversationStatus::Processing, ConversationStatus::Locked, ConversationStatus::ToolLoop], true)
         ) {
-            return new JsonResponse(['error' => 'Conversation is already processing'], 409);
+            return new JsonResponse(['error' => self::ERROR_CONVERSATION_PROCESSING], 409);
         }
 
         $maxActive = $this->config->getMaxActiveConversationsPerUser();
@@ -217,19 +210,7 @@ final readonly class ChatApiController
         }
 
         if ($fileUid !== null) {
-            $messages = $conversation->getDecodedMessages();
-            $messages[] = [
-                'role' => MessageRole::User->value,
-                'content' => $content,
-                'fileUid' => $fileUid,
-                'fileName' => $fileName,
-                'fileMimeType' => $fileMimeType,
-                'createdAt' => (new DateTimeImmutable())->format(DateTimeInterface::ATOM),
-            ];
-            $conversation->setMessages($messages);
-            if ($conversation->getTitle() === '') {
-                $conversation->setTitle($content);
-            }
+            $this->appendUserMessageWithFile($conversation, $content, $fileUid, $fileName, $fileMimeType);
         } else {
             $conversation->appendMessage(MessageRole::User, $content);
         }
@@ -241,7 +222,7 @@ final readonly class ChatApiController
         // preventing race conditions with concurrent requests or worker dequeue.
         $claimed = $this->repository->updateIf($conversation, $currentStatus);
         if (!$claimed) {
-            return new JsonResponse(['error' => 'Conversation is already processing'], 409);
+            return new JsonResponse(['error' => self::ERROR_CONVERSATION_PROCESSING], 409);
         }
 
         $this->processor->dispatch($conversation->getUid());
@@ -355,7 +336,7 @@ final readonly class ChatApiController
         try {
             $file = $this->resourceFactory->getFileObject((int) $rawUid);
         } catch (Exception) {
-            return new JsonResponse(['error' => 'File not found'], 404);
+            return new JsonResponse(['error' => self::ERROR_FILE_NOT_FOUND], 404);
         }
 
         if (!$file->checkActionPermission('read')) {
@@ -401,7 +382,7 @@ final readonly class ChatApiController
         // Atomic CAS: write full row only if status still matches.
         $claimed = $this->repository->updateIf($conversation, $currentStatus);
         if (!$claimed) {
-            return new JsonResponse(['error' => 'Conversation is already processing'], 409);
+            return new JsonResponse(['error' => self::ERROR_CONVERSATION_PROCESSING], 409);
         }
 
         $this->processor->dispatch($conversation->getUid());
@@ -497,6 +478,51 @@ final readonly class ChatApiController
         return $conversation;
     }
 
+    /**
+     * Resolves an attachment's name and MIME type, enforcing the per-conversation file
+     * limit and read permission. Returns [name, mimeType] on success or an error response.
+     *
+     * @return array{0: string, 1: string}|ResponseInterface
+     */
+    private function resolveAttachment(Conversation $conversation, int $fileUid): array|ResponseInterface
+    {
+        if ($this->countFilesInConversation($conversation) >= 5) {
+            return new JsonResponse(['error' => 'Maximum 5 files per conversation reached'], 400);
+        }
+
+        try {
+            $file = $this->resourceFactory->getFileObject($fileUid);
+            if (!$file->checkActionPermission('read')) {
+                return new JsonResponse(['error' => self::ERROR_FILE_NOT_FOUND], 404);
+            }
+            return [$file->getName(), $file->getMimeType()];
+        } catch (Exception) {
+            return new JsonResponse(['error' => self::ERROR_FILE_NOT_FOUND], 404);
+        }
+    }
+
+    private function appendUserMessageWithFile(
+        Conversation $conversation,
+        string $content,
+        int $fileUid,
+        ?string $fileName,
+        ?string $fileMimeType,
+    ): void {
+        $messages = $conversation->getDecodedMessages();
+        $messages[] = [
+            'role' => MessageRole::User->value,
+            'content' => $content,
+            'fileUid' => $fileUid,
+            'fileName' => $fileName,
+            'fileMimeType' => $fileMimeType,
+            'createdAt' => (new DateTimeImmutable())->format(DateTimeInterface::ATOM),
+        ];
+        $conversation->setMessages($messages);
+        if ($conversation->getTitle() === '') {
+            $conversation->setTitle($content);
+        }
+    }
+
     private function checkAccess(): ?ResponseInterface
     {
         $allowedGroups = $this->config->getAllowedGroupIds();
@@ -528,9 +554,9 @@ final readonly class ChatApiController
      */
     private function parseBody(ServerRequestInterface $request): array
     {
-        /** @var array<string, string|int> $body */
-        $body = json_decode((string) $request->getBody(), true) ?? [];
-        return $body;
+        /** @var array<string, string|int> $decoded */
+        $decoded = json_decode((string) $request->getBody(), true) ?? [];
+        return $decoded;
     }
 
     private function getBeUserUid(): int

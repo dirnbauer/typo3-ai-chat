@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Netresearch\NrMcpAgent\Domain\Repository;
 
 use Netresearch\NrLlm\Domain\Model\Model as LlmModel;
-use RuntimeException;
+use Netresearch\NrMcpAgent\Exception\Exception as NrMcpAgentException;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Extbase\Persistence\Generic\Mapper\DataMapper;
@@ -38,7 +38,7 @@ class LlmTaskRepository
             ->fetchAssociative();
 
         if ($row === false) {
-            throw new RuntimeException(sprintf('Could not resolve LLM model for task uid %d', $taskUid));
+            throw new NrMcpAgentException(sprintf('Could not resolve LLM model for task uid %d', $taskUid));
         }
 
         $systemPrompt = is_string($row['_config_system_prompt'] ?? null) ? $row['_config_system_prompt'] : '';
@@ -50,7 +50,7 @@ class LlmTaskRepository
         $model = $models[0] ?? null;
 
         if ($model === null) {
-            throw new RuntimeException(sprintf('Could not map LLM model for task uid %d', $taskUid));
+            throw new NrMcpAgentException(sprintf('Could not map LLM model for task uid %d', $taskUid));
         }
 
         return [

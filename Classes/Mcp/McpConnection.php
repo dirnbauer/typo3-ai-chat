@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Netresearch\NrMcpAgent\Mcp;
 
-use RuntimeException;
+use Netresearch\NrMcpAgent\Exception\McpException;
 use stdClass;
 
 final class McpConnection
@@ -41,7 +41,7 @@ final class McpConnection
         );
 
         if ($process === false) {
-            throw new RuntimeException('Failed to start MCP server process');
+            throw new McpException('Failed to start MCP server process');
         }
 
         $this->process = $process;
@@ -133,7 +133,7 @@ final class McpConnection
     private function write(string $data): void
     {
         if ($this->stdin === null) {
-            throw new RuntimeException('MCP connection not open');
+            throw new McpException('MCP connection not open');
         }
         fwrite($this->stdin, $data . "\n");
         fflush($this->stdin);
@@ -144,25 +144,18 @@ final class McpConnection
      */
     private function readResponse(int $expectedId, float $timeoutSeconds = 30.0): array
     {
-        if ($this->stdout === null) {
-            throw new RuntimeException('MCP connection not open');
+        $stdout = $this->stdout;
+        if ($stdout === null) {
+            throw new McpException('MCP connection not open');
         }
 
         $deadline = microtime(true) + $timeoutSeconds;
         $buffer = '';
 
         while (microtime(true) < $deadline) {
-            $chunk = fgets($this->stdout);
+            $chunk = fgets($stdout);
             if ($chunk === false || $chunk === '') {
-                // If the process has already exited without sending a valid response, fail fast
-                if ($this->process !== null) {
-                    $status = proc_get_status($this->process);
-                    if (!$status['running']) {
-                        throw new RuntimeException(
-                            sprintf('MCP server process exited (code %d) without responding', $status['exitcode']),
-                        );
-                    }
-                }
+                $this->assertProcessAlive();
                 usleep(10_000);
                 continue;
             }
@@ -177,31 +170,59 @@ final class McpConnection
 
             $buffer = '';
 
-            if (!isset($decoded['id'])) {
-                continue;
+            $result = $this->matchResponse($decoded, $expectedId);
+            if ($result !== null) {
+                return $result;
             }
-
-            if ($decoded['id'] !== $expectedId) {
-                continue;
-            }
-
-            if (isset($decoded['error'])) {
-                /** @var array<string, mixed> $error */
-                $error = is_array($decoded['error']) ? $decoded['error'] : [];
-                $errCode = is_int($error['code'] ?? null) ? $error['code'] : -1;
-                $errMsg = is_string($error['message'] ?? null) ? $error['message'] : 'Unknown error';
-                throw new RuntimeException(
-                    sprintf('MCP error %d: %s', $errCode, $errMsg),
-                );
-            }
-
-            /** @var array<string, mixed> $result */
-            $result = $decoded['result'] ?? [];
-            return $result;
         }
 
-        throw new RuntimeException(
+        throw new McpException(
             sprintf('MCP server timeout after %.1fs waiting for response to request %d', $timeoutSeconds, $expectedId),
         );
+    }
+
+    /**
+     * Fails fast if the server process has already exited without responding.
+     */
+    private function assertProcessAlive(): void
+    {
+        if ($this->process === null) {
+            return;
+        }
+        $status = proc_get_status($this->process);
+        if (!$status['running']) {
+            throw new McpException(
+                sprintf('MCP server process exited (code %d) without responding', $status['exitcode']),
+            );
+        }
+    }
+
+    /**
+     * Returns the result array if $decoded is the response for $expectedId,
+     * null if it is an unrelated message, and throws on a JSON-RPC error.
+     *
+     * @param array<mixed> $decoded
+     * @return array<string, mixed>|null
+     */
+    private function matchResponse(array $decoded, int $expectedId): ?array
+    {
+        if (!isset($decoded['id']) || $decoded['id'] !== $expectedId) {
+            return null;
+        }
+
+        if (isset($decoded['error'])) {
+            /** @var array<string, mixed> $error */
+            $error = is_array($decoded['error']) ? $decoded['error'] : [];
+            $errCode = is_int($error['code'] ?? null) ? $error['code'] : -1;
+            $errMsg = is_string($error['message'] ?? null) ? $error['message'] : 'Unknown error';
+            throw new McpException(
+                sprintf('MCP error %d: %s', $errCode, $errMsg),
+            );
+        }
+
+        /** @var array<string, mixed> $result */
+        $result = $decoded['result'] ?? [];
+
+        return $result;
     }
 }

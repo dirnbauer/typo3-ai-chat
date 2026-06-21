@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Netresearch\NrMcpAgent\Utility;
 
-use RuntimeException;
+use Netresearch\NrMcpAgent\Exception\Exception as NrMcpAgentException;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
@@ -28,7 +28,7 @@ final class BackendUserInitializer
             ->fetchAssociative();
 
         if ($userRecord === false) {
-            throw new RuntimeException(sprintf('Backend user %d not found', $userUid));
+            throw new NrMcpAgentException(sprintf('Backend user %d not found', $userUid));
         }
 
         $backendUser->user = $userRecord;

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Netresearch\NrMcpAgent\Document;
 
-use RuntimeException;
+use Netresearch\NrMcpAgent\Exception\DocumentExtractionException;
 
 final readonly class DocumentExtractorRegistry
 {
@@ -74,7 +74,7 @@ final readonly class DocumentExtractorRegistry
     {
         $extractor = $this->findExtractor($mimeType);
         if ($extractor === null) {
-            throw new RuntimeException('No extractor available for MIME type: ' . $mimeType, 1743000020);
+            throw new DocumentExtractionException('No extractor available for MIME type: ' . $mimeType, 1743000020);
         }
         return $extractor;
     }

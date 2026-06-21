@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Netresearch\NrMcpAgent\Document\Extractor;
 
 use Netresearch\NrMcpAgent\Document\DocumentExtractorInterface;
-use RuntimeException;
+use Netresearch\NrMcpAgent\Exception\DocumentExtractionException;
 
 final class PlainTextExtractor implements DocumentExtractorInterface
 {
@@ -27,7 +27,7 @@ final class PlainTextExtractor implements DocumentExtractorInterface
     public function validate(string $path): void
     {
         if (!is_readable($path)) {
-            throw new RuntimeException('File is not readable: ' . $path, 1743000010);
+            throw new DocumentExtractionException('File is not readable: ' . $path, 1743000010);
         }
     }
 
@@ -35,7 +35,7 @@ final class PlainTextExtractor implements DocumentExtractorInterface
     {
         $content = @file_get_contents($path);
         if ($content === false) {
-            throw new RuntimeException('Failed to read file: ' . $path, 1743000011);
+            throw new DocumentExtractionException('Failed to read file: ' . $path, 1743000011);
         }
         return $content;
     }
