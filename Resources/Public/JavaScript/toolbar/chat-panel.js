@@ -8,15 +8,15 @@
 import '../ai-chat-panel.js';
 
 class ChatPanelToolbarInit {
-    constructor() {
+    static init() {
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => this._init());
+            document.addEventListener('DOMContentLoaded', () => ChatPanelToolbarInit._wire());
         } else {
-            this._init();
+            ChatPanelToolbarInit._wire();
         }
     }
 
-    _init() {
+    static _wire() {
         const btn = document.querySelector('.ai-chat-toolbar-btn');
         if (!btn) return;
 
@@ -31,4 +31,4 @@ class ChatPanelToolbarInit {
     }
 }
 
-new ChatPanelToolbarInit();
+ChatPanelToolbarInit.init();

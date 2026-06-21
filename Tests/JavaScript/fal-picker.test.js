@@ -72,17 +72,17 @@ describe('_openFalPicker', () => {
     let origTYPO3;
 
     beforeEach(() => {
-        origTYPO3 = global.TYPO3;
+        origTYPO3 = globalThis.TYPO3;
     });
 
     afterEach(() => {
-        global.TYPO3 = origTYPO3;
+        globalThis.TYPO3 = origTYPO3;
         // Clean up any overlays appended to document.body
         document.querySelectorAll('[aria-modal]').forEach(el => el.remove());
     });
 
     test('shows error and does not open overlay when elementBrowserUrl is missing', () => {
-        global.TYPO3 = {settings: {Wizards: {}}};
+        globalThis.TYPO3 = {settings: {Wizards: {}}};
 
         const host = makeHost();
         const ctrl = makeController(host);
@@ -93,7 +93,7 @@ describe('_openFalPicker', () => {
     });
 
     test('returns early without opening second overlay when listener already registered', () => {
-        global.TYPO3 = {settings: {Wizards: {elementBrowserUrl: '/typo3/wizard/browse?token=x'}}};
+        globalThis.TYPO3 = {settings: {Wizards: {elementBrowserUrl: '/typo3/wizard/browse?token=x'}}};
 
         const host = makeHost();
         const ctrl = makeController(host);
@@ -105,7 +105,7 @@ describe('_openFalPicker', () => {
     });
 
     test('appends iframe overlay to document.body with correct URL', () => {
-        global.TYPO3 = {settings: {Wizards: {elementBrowserUrl: '/typo3/wizard/browse?token=x'}}};
+        globalThis.TYPO3 = {settings: {Wizards: {elementBrowserUrl: '/typo3/wizard/browse?token=x'}}};
 
         const host = makeHost();
         const ctrl = makeController(host);
@@ -120,7 +120,7 @@ describe('_openFalPicker', () => {
     });
 
     test('clicking overlay background cleans up listener and removes overlay', () => {
-        global.TYPO3 = {settings: {Wizards: {elementBrowserUrl: '/typo3/wizard/browse?token=x'}}};
+        globalThis.TYPO3 = {settings: {Wizards: {elementBrowserUrl: '/typo3/wizard/browse?token=x'}}};
 
         const host = makeHost();
         const ctrl = makeController(host);
@@ -140,7 +140,7 @@ describe('_openFalPicker', () => {
     });
 
     test('registered postMessage listener invokes _onFalFileSelected with parsed numeric uid', () => {
-        global.TYPO3 = {settings: {Wizards: {elementBrowserUrl: '/typo3/wizard/browse?token=x'}}};
+        globalThis.TYPO3 = {settings: {Wizards: {elementBrowserUrl: '/typo3/wizard/browse?token=x'}}};
 
         const host = makeHost();
         const ctrl = makeController(host);
@@ -149,7 +149,7 @@ describe('_openFalPicker', () => {
 
         // Simulate TYPO3 element browser sending postMessage after user selects a file
         const event = new MessageEvent('message', {
-            origin: window.location.origin,
+            origin: globalThis.location.origin,
             data: {
                 actionName: 'typo3:elementBrowser:elementAdded',
                 fieldName: 'nr_mcp_agent_fal_picker',
@@ -166,7 +166,7 @@ describe('_openFalPicker', () => {
     });
 
     test('postMessage with table_uid format (sys_file_42) extracts numeric uid 42', () => {
-        global.TYPO3 = {settings: {Wizards: {elementBrowserUrl: '/typo3/wizard/browse?token=x'}}};
+        globalThis.TYPO3 = {settings: {Wizards: {elementBrowserUrl: '/typo3/wizard/browse?token=x'}}};
 
         const host = makeHost();
         const ctrl = makeController(host);
@@ -175,7 +175,7 @@ describe('_openFalPicker', () => {
 
         // Simulate TYPO3 sending value in table_uid format (sys_file_42)
         const event = new MessageEvent('message', {
-            origin: window.location.origin,
+            origin: globalThis.location.origin,
             data: {
                 actionName: 'typo3:elementBrowser:elementAdded',
                 fieldName: 'nr_mcp_agent_fal_picker',
@@ -190,7 +190,7 @@ describe('_openFalPicker', () => {
     });
 
     test('postMessage with non-zero uid does not call _onFalFileSelected for wrong fieldName', () => {
-        global.TYPO3 = {settings: {Wizards: {elementBrowserUrl: '/typo3/wizard/browse?token=x'}}};
+        globalThis.TYPO3 = {settings: {Wizards: {elementBrowserUrl: '/typo3/wizard/browse?token=x'}}};
 
         const host = makeHost();
         const ctrl = makeController(host);
@@ -199,7 +199,7 @@ describe('_openFalPicker', () => {
 
         // Message for a different field — should be ignored
         const event = new MessageEvent('message', {
-            origin: window.location.origin,
+            origin: globalThis.location.origin,
             data: {
                 actionName: 'typo3:elementBrowser:elementAdded',
                 fieldName: 'some_other_field',
@@ -212,7 +212,7 @@ describe('_openFalPicker', () => {
     });
 
     test('postMessage with value 0 does not call _onFalFileSelected (user cancelled)', () => {
-        global.TYPO3 = {settings: {Wizards: {elementBrowserUrl: '/typo3/wizard/browse?token=x'}}};
+        globalThis.TYPO3 = {settings: {Wizards: {elementBrowserUrl: '/typo3/wizard/browse?token=x'}}};
 
         const host = makeHost();
         const ctrl = makeController(host);
@@ -221,7 +221,7 @@ describe('_openFalPicker', () => {
         ctrl._onFalFileSelected = jest.fn();
         // Simulate cancel — value is empty string or 0
         const event = new MessageEvent('message', {
-            origin: window.location.origin,
+            origin: globalThis.location.origin,
             data: {
                 actionName: 'typo3:elementBrowser:elementAdded',
                 fieldName: 'nr_mcp_agent_fal_picker',
@@ -234,7 +234,7 @@ describe('_openFalPicker', () => {
     });
 
     test('guard prevents _onFalFileSelected from being called twice if listener fires on multiple windows', () => {
-        global.TYPO3 = {settings: {Wizards: {elementBrowserUrl: '/typo3/wizard/browse?token=x'}}};
+        globalThis.TYPO3 = {settings: {Wizards: {elementBrowserUrl: '/typo3/wizard/browse?token=x'}}};
 
         const host = makeHost();
         const ctrl = makeController(host);
@@ -248,16 +248,16 @@ describe('_openFalPicker', () => {
         };
 
         // First delivery (e.g. via globalThis) — should process normally
-        globalThis.dispatchEvent(new MessageEvent('message', {origin: window.location.origin, data: eventData}));
+        globalThis.dispatchEvent(new MessageEvent('message', {origin: globalThis.location.origin, data: eventData}));
         expect(ctrl._onFalFileSelected).toHaveBeenCalledTimes(1);
 
         // Second delivery (e.g. via top — same object in jsdom) — guard must prevent double-call
-        globalThis.dispatchEvent(new MessageEvent('message', {origin: window.location.origin, data: eventData}));
+        globalThis.dispatchEvent(new MessageEvent('message', {origin: globalThis.location.origin, data: eventData}));
         expect(ctrl._onFalFileSelected).toHaveBeenCalledTimes(1); // still 1, not 2
     });
 
     test('picker can be reopened after cleanup', () => {
-        global.TYPO3 = {settings: {Wizards: {elementBrowserUrl: '/typo3/wizard/browse?token=x'}}};
+        globalThis.TYPO3 = {settings: {Wizards: {elementBrowserUrl: '/typo3/wizard/browse?token=x'}}};
 
         const host = makeHost();
         const ctrl = makeController(host);

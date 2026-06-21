@@ -463,8 +463,9 @@ export class ChatCoreController {
             if (!this._falPickerOverlay) return; // guard against duplicate invocations
             this._cleanupFalPicker();
             // Extract the trailing integer — handles both "42" and "sys_file_42"
-            const match = String(event.data.value ?? '').match(/(\d+)$/);
-            const uid = match ? parseInt(match[1], 10) : 0;
+            const re = /(\d+)$/;
+            const match = re.exec(String(event.data.value ?? ''));
+            const uid = match ? Number.parseInt(match[1], 10) : 0;
             if (uid > 0) {
                 this._onFalFileSelected(uid);
             }

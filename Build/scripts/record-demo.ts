@@ -17,10 +17,10 @@
  */
 
 import { chromium, Page } from 'playwright';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { execSync } from 'child_process';
-import fs from 'fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { execSync } from 'node:child_process';
+import fs from 'node:fs';
 
 const BASE_URL  = process.env.TYPO3_BASE_URL      || 'https://v14.nr-mcp-agent.ddev.site:33001';
 const USER      = process.env.TYPO3_ADMIN_USER     || 'admin';
@@ -29,7 +29,8 @@ const PREVIEW   = process.env.PREVIEW === '1'; // headed + slow-mo, no GIF expor
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT_DIR   = path.resolve(__dirname, '../../Documentation/Images');
-const TMP_DIR   = '/tmp/nr-mcp-demo';
+// Local developer-only demo recorder; writes throwaway video frames to a temp dir. NOSONAR
+const TMP_DIR   = '/tmp/nr-mcp-demo'; // NOSONAR(typescript:S5443) build-only script, never runs in production
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -233,7 +234,7 @@ function getNewPageUid(): number {
             `"SELECT uid FROM pages WHERE title='Getting Started' ORDER BY crdate DESC LIMIT 1;"`,
             { encoding: 'utf8' }
         ).trim();
-        const uid = parseInt(result, 10);
+        const uid = Number.parseInt(result, 10);
         if (uid > 0) { console.log(`  ✓ new page uid: ${uid}`); return uid; }
     } catch { /* ignore */ }
     console.log('  ℹ could not determine page uid');
@@ -394,7 +395,9 @@ async function main(): Promise<void> {
     console.log(`\n✓ AgentDemo.gif saved (${sizeMb} MB) → ${gifPath}\n`);
 }
 
-main().catch((err) => {
+try {
+    await main();
+} catch (err) {
     console.error('\n✗ Demo recording failed:', err);
     process.exit(1);
-});
+}

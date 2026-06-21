@@ -669,7 +669,7 @@ export class ChatApp extends LitElement {
             <div class="attach-menu-wrap">
                 <button class="btn btn-icon"
                         ?disabled=${!canAttach}
-                        title="${!canAttach ? lll('attachment.limitReached') : lll('attachment.attach')}"
+                        title="${canAttach ? lll('attachment.attach') : lll('attachment.limitReached')}"
                         aria-label="${lll('attachment.attach')}"
                         aria-expanded="${String(this._attachMenuOpen)}"
                         aria-haspopup="menu"
@@ -739,8 +739,12 @@ export class ChatApp extends LitElement {
         // User + assistant — avatar row with timestamp
         const isUser = role === 'user';
         const time = this.chat.formatTime(msg.createdAt);
+        const fileIcon = msg.fileMimeType?.startsWith('image/') ? '\u{1F5BC}\uFE0F' : '\u{1F4C4}';
+        const fileBadge = msg.fileUid
+            ? html`<div class="message-file-badge">${fileIcon} ${msg.fileName || lll('attachment.file')}</div>`
+            : nothing;
         const bubbleContent = isUser
-            ? html`${msg.fileUid ? html`<div class="message-file-badge">${msg.fileMimeType?.startsWith('image/') ? '\u{1F5BC}\uFE0F' : '\u{1F4C4}'} ${msg.fileName || lll('attachment.file')}</div>` : nothing}${this.chat.renderMessageContent(msg)}`
+            ? html`${fileBadge}${this.chat.renderMessageContent(msg)}`
             : unsafeHTML(this.chat.renderMessageContent(msg));
 
         return html`

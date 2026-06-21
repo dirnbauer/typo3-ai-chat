@@ -109,7 +109,7 @@ export class ApiClient {
      */
     _url(routeName) {
         // TYPO3 injects AJAX URLs into a global object
-        if (typeof TYPO3 !== 'undefined' && TYPO3.settings && TYPO3.settings.ajaxUrls) {
+        if (typeof TYPO3 !== 'undefined' && TYPO3.settings?.ajaxUrls) {
             const url = TYPO3.settings.ajaxUrls[routeName];
             if (url) return url;
         }

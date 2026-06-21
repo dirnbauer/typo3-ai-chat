@@ -30,7 +30,7 @@ async function waitForChatPanel(page: Page): Promise<void> {
     );
     // Ensure TYPO3 backend settings (including elementBrowserUrl) are injected
     await page.waitForFunction(
-        () => !!(window as any).top?.TYPO3?.settings?.Wizards?.elementBrowserUrl,
+        () => !!(globalThis as any).top?.TYPO3?.settings?.Wizards?.elementBrowserUrl,
         null,
         { timeout: 10000 },
     );
@@ -134,9 +134,9 @@ test.describe('FAL picker overlay', () => {
         // Simulate TYPO3 element browser posting the "file selected" message.
         // getParent() should resolve to window (or top), both of which we now listen on.
         await page.evaluate(() => {
-            window.dispatchEvent(
+            globalThis.dispatchEvent(
                 new MessageEvent('message', {
-                    origin: window.location.origin,
+                    origin: globalThis.location.origin,
                     data: {
                         actionName: 'typo3:elementBrowser:elementAdded',
                         fieldName: 'nr_mcp_agent_fal_picker',
@@ -161,9 +161,9 @@ test.describe('FAL picker overlay', () => {
         // Simulate the message being delivered to top (the TYPO3 backend root),
         // which is one of the candidate windows TYPO3's getParent() may choose.
         await page.evaluate(() => {
-            (top ?? window).dispatchEvent(
+            (top ?? globalThis).dispatchEvent(
                 new MessageEvent('message', {
-                    origin: window.location.origin,
+                    origin: globalThis.location.origin,
                     data: {
                         actionName: 'typo3:elementBrowser:elementAdded',
                         fieldName: 'nr_mcp_agent_fal_picker',
@@ -184,9 +184,9 @@ test.describe('FAL picker overlay', () => {
         await expect(overlay).toBeVisible({ timeout: 3000 });
 
         await page.evaluate(() => {
-            window.dispatchEvent(
+            globalThis.dispatchEvent(
                 new MessageEvent('message', {
-                    origin: window.location.origin,
+                    origin: globalThis.location.origin,
                     data: {
                         actionName: 'typo3:elementBrowser:elementAdded',
                         fieldName: 'some_other_field',
@@ -222,9 +222,9 @@ test.describe('FAL picker overlay', () => {
                 fieldName: 'nr_mcp_agent_fal_picker',
                 value: '1',
             };
-            const opts = { origin: window.location.origin, data };
-            window.dispatchEvent(new MessageEvent('message', opts));
-            (top ?? window).dispatchEvent(new MessageEvent('message', opts));
+            const opts = { origin: globalThis.location.origin, data };
+            globalThis.dispatchEvent(new MessageEvent('message', opts));
+            (top ?? globalThis).dispatchEvent(new MessageEvent('message', opts));
         });
 
         // Overlay must close exactly once — no double-cleanup errors.
