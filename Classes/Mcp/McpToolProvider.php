@@ -67,98 +67,73 @@ final class McpToolProvider implements McpToolProviderInterface
                 continue;
             }
 
-            $allTools = array_merge($allTools, $this->collectServerTools($server, $serverKey));
+            $uid = $this->toUid($server['uid'] ?? 0);
+            $cacheKey = $this->buildCacheKey($server);
+
+            /** @var list<array{type: string, function: array{name: string, description: string, parameters: array<string, mixed>}}>|false $cached */
+            $cached = $this->cache->get($cacheKey);
+
+            if ($cached !== false) {
+                // Cache hit: populate toolIndex, no connection needed
+                foreach ($cached as $tool) {
+                    $prefixedName = $tool['function']['name'];
+                    $this->toolIndex[$prefixedName] = $serverKey;
+                }
+                $allTools = array_merge($allTools, $cached);
+                continue;
+            }
+
+            // Cache miss: connect (or reuse existing), list tools, cache, populate toolIndex
+            try {
+                $connection = $this->connections[$serverKey] ?? $this->openConnection($server);
+                $this->connections[$serverKey] = $connection;
+
+                $result = $connection->call('tools/list');
+                /** @var array<mixed> $rawTools */
+                $rawTools = is_array($result['tools'] ?? null) ? $result['tools'] : [];
+
+                $serverTools = [];
+                foreach ($rawTools as $tool) {
+                    if (!is_array($tool)) {
+                        continue;
+                    }
+                    /** @var array<string, mixed> $toolData */
+                    $toolData = $tool;
+                    $originalName = is_string($toolData['name'] ?? null) ? $toolData['name'] : '';
+                    $description = is_string($toolData['description'] ?? null) ? $toolData['description'] : '';
+                    /** @var array<string, mixed> $inputSchema */
+                    $inputSchema = is_array($toolData['inputSchema'] ?? null) ? $toolData['inputSchema'] : [];
+                    $parameters = $this->normalizeToolSchema($inputSchema);
+
+                    $prefixedName = $serverKey . '__' . $originalName;
+                    $this->toolIndex[$prefixedName] = $serverKey;
+
+                    $serverTools[] = [
+                        'type' => 'function',
+                        'function' => [
+                            'name' => $prefixedName,
+                            'description' => $description,
+                            'parameters' => $parameters,
+                        ],
+                    ];
+                }
+
+                $this->cache->set($cacheKey, $serverTools);
+                $allTools = array_merge($allTools, $serverTools);
+
+                $this->serverRepository->updateConnectionStatus($uid, 'ok');
+            } catch (Throwable $e) {
+                $this->logger->error('MCP server connection failed', [
+                    'server_key' => $serverKey,
+                    'error' => $e->getMessage(),
+                ]);
+                $this->serverRepository->updateConnectionStatus($uid, 'error', $e->getMessage());
+                // Skip this server, continue with others
+            }
         }
 
         /** @var list<array{type: string, function: array{name: string, description: string, parameters: array<string, mixed>}}> $allTools */
         return $allTools;
-    }
-
-    /**
-     * Returns the tool definitions for a single server, using the cache when available
-     * and connecting to list tools on a cache miss. Failures are logged and yield [].
-     *
-     * @param array<string, mixed> $server
-     * @return list<array{type: string, function: array{name: string, description: string, parameters: array<string, mixed>}}>
-     */
-    private function collectServerTools(array $server, string $serverKey): array
-    {
-        $cacheKey = $this->buildCacheKey($server);
-
-        /** @var list<array{type: string, function: array{name: string, description: string, parameters: array<string, mixed>}}>|false $cached */
-        $cached = $this->cache->get($cacheKey);
-
-        if ($cached !== false) {
-            // Cache hit: populate toolIndex, no connection needed
-            foreach ($cached as $tool) {
-                $this->toolIndex[$tool['function']['name']] = $serverKey;
-            }
-            return $cached;
-        }
-
-        $uid = $this->toUid($server['uid'] ?? 0);
-
-        // Cache miss: connect (or reuse existing), list tools, cache, populate toolIndex
-        try {
-            $connection = $this->connections[$serverKey] ?? $this->openConnection($server);
-            $this->connections[$serverKey] = $connection;
-
-            $result = $connection->call('tools/list');
-            /** @var array<mixed> $rawTools */
-            $rawTools = is_array($result['tools'] ?? null) ? $result['tools'] : [];
-
-            $serverTools = $this->buildServerToolDefinitions($rawTools, $serverKey);
-
-            $this->cache->set($cacheKey, $serverTools);
-            $this->serverRepository->updateConnectionStatus($uid, 'ok');
-
-            return $serverTools;
-        } catch (Throwable $e) {
-            $this->logger->error('MCP server connection failed', [
-                'server_key' => $serverKey,
-                'error' => $e->getMessage(),
-            ]);
-            $this->serverRepository->updateConnectionStatus($uid, 'error', $e->getMessage());
-            // Skip this server, continue with others
-            return [];
-        }
-    }
-
-    /**
-     * Maps raw MCP tool rows to prefixed function definitions and registers them in toolIndex.
-     *
-     * @param array<mixed> $rawTools
-     * @return list<array{type: string, function: array{name: string, description: string, parameters: array<string, mixed>}}>
-     */
-    private function buildServerToolDefinitions(array $rawTools, string $serverKey): array
-    {
-        $serverTools = [];
-        foreach ($rawTools as $tool) {
-            if (!is_array($tool)) {
-                continue;
-            }
-            /** @var array<string, mixed> $toolData */
-            $toolData = $tool;
-            $originalName = is_string($toolData['name'] ?? null) ? $toolData['name'] : '';
-            $description = is_string($toolData['description'] ?? null) ? $toolData['description'] : '';
-            /** @var array<string, mixed> $inputSchema */
-            $inputSchema = is_array($toolData['inputSchema'] ?? null) ? $toolData['inputSchema'] : [];
-            $parameters = $this->normalizeToolSchema($inputSchema);
-
-            $prefixedName = $serverKey . '__' . $originalName;
-            $this->toolIndex[$prefixedName] = $serverKey;
-
-            $serverTools[] = [
-                'type' => 'function',
-                'function' => [
-                    'name' => $prefixedName,
-                    'description' => $description,
-                    'parameters' => $parameters,
-                ],
-            ];
-        }
-
-        return $serverTools;
     }
 
     /**
@@ -174,9 +149,27 @@ final class McpToolProvider implements McpToolProviderInterface
         // Strip prefix to get original MCP tool name
         $originalName = substr($toolName, strlen($serverKey) + 2); // +2 for '__'
 
-        $connectionError = $this->ensureConnection($serverKey);
-        if ($connectionError !== null) {
-            return $connectionError;
+        // Lazy connection: open if not already connected (cache-hit path)
+        if (!isset($this->connections[$serverKey])) {
+            $server = $this->findServerByKey($serverKey);
+            if ($server === null) {
+                return json_encode(['error' => "MCP server '" . $serverKey . "' not found"]) ?: '{"error":"Server not found"}';
+            }
+
+            try {
+                $this->connections[$serverKey] = $this->openConnection($server);
+                $this->serverRepository->updateConnectionStatus(
+                    $this->toUid($server['uid'] ?? 0),
+                    'ok',
+                );
+            } catch (Throwable $e) {
+                $this->logger->error('MCP server connection failed during executeTool', [
+                    'server_key' => $serverKey,
+                    'error' => $e->getMessage(),
+                ]);
+                return json_encode(['error' => "MCP server '" . $serverKey . "' not connected: " . $e->getMessage()])
+                    ?: '{"error":"Connection failed"}';
+            }
         }
 
         $result = $this->connections[$serverKey]->call('tools/call', [
@@ -184,46 +177,6 @@ final class McpToolProvider implements McpToolProviderInterface
             'arguments' => $input,
         ]);
 
-        $texts = $this->extractTextBlocks($result);
-
-        return implode("\n", $texts) ?: (json_encode($result) ?: '{}');
-    }
-
-    /**
-     * Ensures a connection for the given server key exists (lazy-opening on the cache-hit
-     * path). Returns null on success or an error JSON string on failure.
-     */
-    private function ensureConnection(string $serverKey): ?string
-    {
-        if (isset($this->connections[$serverKey])) {
-            return null;
-        }
-
-        $server = $this->findServerByKey($serverKey);
-        if ($server === null) {
-            return json_encode(['error' => "MCP server '" . $serverKey . "' not found"]) ?: '{"error":"Server not found"}';
-        }
-
-        try {
-            $this->connections[$serverKey] = $this->openConnection($server);
-            $this->serverRepository->updateConnectionStatus($this->toUid($server['uid'] ?? 0), 'ok');
-            return null;
-        } catch (Throwable $e) {
-            $this->logger->error('MCP server connection failed during executeTool', [
-                'server_key' => $serverKey,
-                'error' => $e->getMessage(),
-            ]);
-            return json_encode(['error' => "MCP server '" . $serverKey . "' not connected: " . $e->getMessage()])
-                ?: '{"error":"Connection failed"}';
-        }
-    }
-
-    /**
-     * @param array<string, mixed> $result
-     * @return list<string>
-     */
-    private function extractTextBlocks(array $result): array
-    {
         $texts = [];
         /** @var array<mixed> $contentBlocks */
         $contentBlocks = is_array($result['content'] ?? null) ? $result['content'] : [];
@@ -238,7 +191,7 @@ final class McpToolProvider implements McpToolProviderInterface
             }
         }
 
-        return $texts;
+        return implode("\n", $texts) ?: (json_encode($result) ?: '{}');
     }
 
     public function disconnect(): void

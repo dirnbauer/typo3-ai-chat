@@ -25,7 +25,6 @@ use Netresearch\NrMcpAgent\Mcp\McpToolProviderInterface;
 use Netresearch\NrMcpAgent\Utility\ErrorMessageSanitizer;
 use Throwable;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
-use TYPO3\CMS\Core\Site\Entity\SiteLanguage;
 use TYPO3\CMS\Core\Site\SiteFinder;
 
 final class ChatService implements ChatCapabilitiesInterface
@@ -220,7 +219,40 @@ final class ChatService implements ChatCapabilitiesInterface
             $response = $this->callToolChatWithRetry($provider, $messages, $toolSpecs, $optionsArray);
 
             if ($response->hasToolCalls()) {
-                $this->handleToolCallRound($conversation, $response);
+                // Normalise typed ToolCall objects to the legacy wire shape —
+                // conversations persist tool calls as JSON, and resumed
+                // conversations replay them as plain arrays anyway. Malformed
+                // entries are dropped instead of failing the conversation.
+                $toolCalls = [];
+                foreach ($response->toolCalls ?? [] as $call) {
+                    if ($call instanceof ToolCall) {
+                        $toolCalls[] = $call->toArray();
+                    } elseif (is_array($call)) {
+                        $toolCalls[] = $call;
+                    }
+                }
+                // Append assistant + tool messages to the stored (non-expanded) messages
+                $storedMessages = $conversation->getDecodedMessages();
+                $storedMessages[] = [
+                    'role' => 'assistant',
+                    'content' => $response->content,
+                    'tool_calls' => $toolCalls,
+                ];
+                $conversation->setMessages($storedMessages);
+                $this->persist($conversation);
+
+                $conversation->setStatus(ConversationStatus::ToolLoop);
+                $toolResults = $this->executeToolCalls($toolCalls);
+                $storedMessages = $conversation->getDecodedMessages();
+                foreach ($toolResults as $result) {
+                    $storedMessages[] = [
+                        'role' => 'tool',
+                        'tool_call_id' => $result['tool_call_id'],
+                        'content' => $result['content'],
+                    ];
+                }
+                $conversation->setMessages($storedMessages);
+                $this->persist($conversation);
                 continue;
             }
 
@@ -233,58 +265,6 @@ final class ChatService implements ChatCapabilitiesInterface
         $conversation->setStatus(ConversationStatus::Failed);
         $conversation->setErrorMessage('Max tool iterations reached');
         $this->persist($conversation);
-    }
-
-    /**
-     * Persists the assistant tool-call message, executes the tool calls,
-     * then persists the resulting tool messages.
-     */
-    private function handleToolCallRound(Conversation $conversation, CompletionResponse $response): void
-    {
-        $toolCalls = $this->normalizeToolCalls($response);
-
-        // Append assistant + tool messages to the stored (non-expanded) messages
-        $storedMessages = $conversation->getDecodedMessages();
-        $storedMessages[] = [
-            'role' => 'assistant',
-            'content' => $response->content,
-            'tool_calls' => $toolCalls,
-        ];
-        $conversation->setMessages($storedMessages);
-        $this->persist($conversation);
-
-        $conversation->setStatus(ConversationStatus::ToolLoop);
-        $toolResults = $this->executeToolCalls($toolCalls);
-        $storedMessages = $conversation->getDecodedMessages();
-        foreach ($toolResults as $result) {
-            $storedMessages[] = [
-                'role' => 'tool',
-                'tool_call_id' => $result['tool_call_id'],
-                'content' => $result['content'],
-            ];
-        }
-        $conversation->setMessages($storedMessages);
-        $this->persist($conversation);
-    }
-
-    /**
-     * Normalise typed ToolCall objects to the legacy wire shape — conversations
-     * persist tool calls as JSON, and resumed conversations replay them as plain
-     * arrays anyway. Malformed entries are dropped instead of failing the conversation.
-     *
-     * @return list<array<string, mixed>>
-     */
-    private function normalizeToolCalls(CompletionResponse $response): array
-    {
-        $toolCalls = [];
-        foreach ($response->toolCalls ?? [] as $call) {
-            if ($call instanceof ToolCall) {
-                $toolCalls[] = $call->toArray();
-            } elseif (is_array($call)) {
-                $toolCalls[] = $call;
-            }
-        }
-        return $toolCalls;
     }
 
     /**
@@ -414,7 +394,11 @@ final class ChatService implements ChatCapabilitiesInterface
             }
 
             try {
-                $fileUid = $this->toFileUid($msg['fileUid']);
+                if (is_int($msg['fileUid'])) {
+                    $fileUid = $msg['fileUid'];
+                } else {
+                    $fileUid = is_numeric($msg['fileUid']) ? (int) $msg['fileUid'] : 0;
+                }
                 $file = $this->resourceFactory->getFileObject($fileUid);
                 $localPath = $file->getForLocalProcessing(false);
                 $base64 = base64_encode((string) file_get_contents($localPath));
@@ -558,10 +542,23 @@ final class ChatService implements ChatCapabilitiesInterface
                     continue;
                 }
 
+                $isoCode = '';
+                try {
+                    $locale = $language->getLocale();
+                    $isoCode = method_exists($locale, 'getLanguageCode') ? strtolower($locale->getLanguageCode()) : '';
+                } catch (Throwable) {
+                    // Locale resolution failed — fall back to hreflang below
+                }
+
+                if ($isoCode === '') {
+                    $hreflang = $language->getHreflang();
+                    $isoCode = strtolower(explode('-', $hreflang)[0]);
+                }
+
                 $languages[$uid] = [
                     'uid' => $uid,
                     'title' => $language->getTitle(),
-                    'isoCode' => $this->resolveIsoCode($language),
+                    'isoCode' => $isoCode,
                 ];
             }
         }
@@ -586,23 +583,6 @@ final class ChatService implements ChatCapabilitiesInterface
 
         return "Available site languages — always set sys_language_uid when creating or updating content:\n"
             . implode("\n", $lines);
-    }
-
-    private function resolveIsoCode(SiteLanguage $language): string
-    {
-        try {
-            $isoCode = strtolower($language->getLocale()->getLanguageCode());
-        } catch (Throwable) {
-            // Locale resolution failed — fall back to hreflang below
-            $isoCode = '';
-        }
-
-        if ($isoCode === '') {
-            $hreflang = $language->getHreflang();
-            $isoCode = strtolower(explode('-', $hreflang)[0]);
-        }
-
-        return $isoCode;
     }
 
     /**
@@ -638,13 +618,5 @@ final class ChatService implements ChatCapabilitiesInterface
     private function persist(Conversation $conversation): void
     {
         $this->repository->update($conversation);
-    }
-
-    private function toFileUid(mixed $value): int
-    {
-        if (is_int($value)) {
-            return $value;
-        }
-        return is_numeric($value) ? (int) $value : 0;
     }
 }

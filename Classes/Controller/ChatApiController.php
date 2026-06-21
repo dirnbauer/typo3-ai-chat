@@ -188,11 +188,21 @@ final readonly class ChatApiController
         $fileMimeType = null;
 
         if ($fileUid !== null) {
-            $resolved = $this->resolveAttachment($conversation, $fileUid);
-            if ($resolved instanceof ResponseInterface) {
-                return $resolved;
+            $existingFileCount = $this->countFilesInConversation($conversation);
+            if ($existingFileCount >= 5) {
+                return new JsonResponse(['error' => 'Maximum 5 files per conversation reached'], 400);
             }
-            [$fileName, $fileMimeType] = $resolved;
+
+            try {
+                $file = $this->resourceFactory->getFileObject($fileUid);
+                if (!$file->checkActionPermission('read')) {
+                    return new JsonResponse(['error' => self::ERROR_FILE_NOT_FOUND], 404);
+                }
+                $fileName = $file->getName();
+                $fileMimeType = $file->getMimeType();
+            } catch (Exception) {
+                return new JsonResponse(['error' => self::ERROR_FILE_NOT_FOUND], 404);
+            }
         }
 
         $currentStatus = $conversation->getStatus();
@@ -210,7 +220,19 @@ final readonly class ChatApiController
         }
 
         if ($fileUid !== null) {
-            $this->appendUserMessageWithFile($conversation, $content, $fileUid, $fileName, $fileMimeType);
+            $messages = $conversation->getDecodedMessages();
+            $messages[] = [
+                'role' => MessageRole::User->value,
+                'content' => $content,
+                'fileUid' => $fileUid,
+                'fileName' => $fileName,
+                'fileMimeType' => $fileMimeType,
+                'createdAt' => (new DateTimeImmutable())->format(DateTimeInterface::ATOM),
+            ];
+            $conversation->setMessages($messages);
+            if ($conversation->getTitle() === '') {
+                $conversation->setTitle($content);
+            }
         } else {
             $conversation->appendMessage(MessageRole::User, $content);
         }
@@ -248,7 +270,26 @@ final readonly class ChatApiController
             return new JsonResponse(['error' => 'No file uploaded'], 400);
         }
 
-        $allowedMimeTypes = $this->resolveAllowedMimeTypes();
+        $capabilities = $this->chatService->getProviderCapabilities();
+        // $capabilities['supportedFormats'] contains file extensions (e.g. 'png', 'jpg') because
+        // the frontend uses them for the <input accept> filter.  finfo returns MIME types, so we
+        // map extensions to MIME types before comparing.
+        $extensionMimeMap = [
+            'png'  => 'image/png',
+            'jpg'  => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'gif'  => 'image/gif',
+            'webp' => 'image/webp',
+            'pdf'  => 'application/pdf',
+        ];
+        $providerMimeTypes = array_values(array_filter(array_map(
+            static fn(string $ext): ?string => $extensionMimeMap[$ext] ?? null,
+            $capabilities['supportedFormats'],
+        )));
+        $allowedMimeTypes = array_values(array_unique(array_merge(
+            $providerMimeTypes,
+            $this->documentExtractorRegistry->getAvailableMimeTypes(),
+        )));
 
         $maxSize = 20 * 1024 * 1024; // 20 MB
         if ($file->getSize() > $maxSize) {
@@ -459,82 +500,6 @@ final readonly class ChatApiController
         return $conversation;
     }
 
-    /**
-     * Resolves an attachment's name and MIME type, enforcing the per-conversation file
-     * limit and read permission. Returns [name, mimeType] on success or an error response.
-     *
-     * @return array{0: string, 1: string}|ResponseInterface
-     */
-    private function resolveAttachment(Conversation $conversation, int $fileUid): array|ResponseInterface
-    {
-        if ($this->countFilesInConversation($conversation) >= 5) {
-            return new JsonResponse(['error' => 'Maximum 5 files per conversation reached'], 400);
-        }
-
-        try {
-            $file = $this->resourceFactory->getFileObject($fileUid);
-            if (!$file->checkActionPermission('read')) {
-                return new JsonResponse(['error' => self::ERROR_FILE_NOT_FOUND], 404);
-            }
-            return [$file->getName(), $file->getMimeType()];
-        } catch (Exception) {
-            return new JsonResponse(['error' => self::ERROR_FILE_NOT_FOUND], 404);
-        }
-    }
-
-    private function appendUserMessageWithFile(
-        Conversation $conversation,
-        string $content,
-        int $fileUid,
-        ?string $fileName,
-        ?string $fileMimeType,
-    ): void {
-        $messages = $conversation->getDecodedMessages();
-        $messages[] = [
-            'role' => MessageRole::User->value,
-            'content' => $content,
-            'fileUid' => $fileUid,
-            'fileName' => $fileName,
-            'fileMimeType' => $fileMimeType,
-            'createdAt' => (new DateTimeImmutable())->format(DateTimeInterface::ATOM),
-        ];
-        $conversation->setMessages($messages);
-        if ($conversation->getTitle() === '') {
-            $conversation->setTitle($content);
-        }
-    }
-
-    /**
-     * Builds the list of allowed upload MIME types from provider-supported formats
-     * (extensions mapped to MIME types) plus the document extractor MIME types.
-     *
-     * @return list<string>
-     */
-    private function resolveAllowedMimeTypes(): array
-    {
-        $capabilities = $this->chatService->getProviderCapabilities();
-        // $capabilities['supportedFormats'] contains file extensions (e.g. 'png', 'jpg') because
-        // the frontend uses them for the <input accept> filter.  finfo returns MIME types, so we
-        // map extensions to MIME types before comparing.
-        $extensionMimeMap = [
-            'png'  => 'image/png',
-            'jpg'  => 'image/jpeg',
-            'jpeg' => 'image/jpeg',
-            'gif'  => 'image/gif',
-            'webp' => 'image/webp',
-            'pdf'  => 'application/pdf',
-        ];
-        $providerMimeTypes = array_values(array_filter(array_map(
-            static fn(string $ext): ?string => $extensionMimeMap[$ext] ?? null,
-            $capabilities['supportedFormats'],
-        )));
-
-        return array_values(array_unique(array_merge(
-            $providerMimeTypes,
-            $this->documentExtractorRegistry->getAvailableMimeTypes(),
-        )));
-    }
-
     private function checkAccess(): ?ResponseInterface
     {
         $allowedGroups = $this->config->getAllowedGroupIds();
@@ -566,9 +531,9 @@ final readonly class ChatApiController
      */
     private function parseBody(ServerRequestInterface $request): array
     {
-        /** @var array<string, string|int> $decoded */
-        $decoded = json_decode((string) $request->getBody(), true) ?? [];
-        return $decoded;
+        /** @var array<string, string|int> $body */
+        $body = json_decode((string) $request->getBody(), true) ?? [];
+        return $body;
     }
 
     private function getBeUserUid(): int

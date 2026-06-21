@@ -42,27 +42,8 @@ final class McpServerCacheFlushHook
             return;
         }
 
-        $this->flushToolCache();
-
-        // Resolve real UID — new records use a temporary string ID until after the save
-        $uid = $this->resolveUid($id, $dataHandler);
-
-        // Load the full verifiable record (fieldArray only contains changed fields)
-        $row = $this->loadVerifiableRecord($uid);
-        if ($row === null) {
-            return;
-        }
-
-        $error = GeneralUtility::makeInstance(McpConnectionChecker::class)->check($row);
-        $this->addConnectionFlashMessage($error);
-    }
-
-    /**
-     * Flush the entire MCP tools cache — it only contains tool lists, so this is safe
-     * and avoids complexity of resolving the exact cache key (which requires the full row).
-     */
-    private function flushToolCache(): void
-    {
+        // Flush the entire MCP tools cache — it only contains tool lists, so this is safe
+        // and avoids complexity of resolving the exact cache key (which requires the full row).
         try {
             $cacheManager = GeneralUtility::makeInstance(CacheManager::class);
             $cache = $cacheManager->getCache('nr_mcp_agent_tools');
@@ -72,48 +53,38 @@ final class McpServerCacheFlushHook
         } catch (Throwable) {
             // Cache not available — nothing to flush
         }
-    }
 
-    private function resolveUid(string|int $id, DataHandler $dataHandler): int
-    {
+        // Resolve real UID — new records use a temporary string ID until after the save
         $resolvedId = is_int($id) ? $id : ($dataHandler->substNEWwithIDs[$id] ?? 0);
         if (is_int($resolvedId)) {
-            return $resolvedId;
+            $uid = $resolvedId;
+        } else {
+            $uid = is_string($resolvedId) || is_float($resolvedId) ? (int) $resolvedId : 0;
         }
-        return is_string($resolvedId) || is_float($resolvedId) ? (int) $resolvedId : 0;
-    }
-
-    /**
-     * Loads the saved server record if it exists and uses a verifiable (stdio) transport.
-     *
-     * @return array<string, mixed>|null
-     */
-    private function loadVerifiableRecord(int $uid): ?array
-    {
         if ($uid === 0) {
-            return null;
+            return;
         }
 
+        // Load the full saved record (fieldArray only contains changed fields)
         $row = GeneralUtility::makeInstance(ConnectionPool::class)
             ->getConnectionForTable(self::TABLE)
             ->select(['*'], self::TABLE, ['uid' => $uid])
             ->fetchAssociative();
 
         if (!is_array($row)) {
-            return null;
+            return;
         }
 
         // SSE transport cannot be verified automatically yet
         $transport = is_string($row['transport'] ?? null) ? $row['transport'] : 'stdio';
         if ($transport !== 'stdio') {
-            return null;
+            return;
         }
 
-        return $row;
-    }
+        /** @var McpConnectionChecker $checker */
+        $checker = GeneralUtility::makeInstance(McpConnectionChecker::class);
+        $error = $checker->check($row);
 
-    private function addConnectionFlashMessage(?string $error): void
-    {
         /** @var FlashMessageService $flashMessageService */
         $flashMessageService = GeneralUtility::makeInstance(FlashMessageService::class);
         $queue = $flashMessageService->getMessageQueueByIdentifier();
