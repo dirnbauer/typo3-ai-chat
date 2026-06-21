@@ -21,6 +21,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 
 const BASE_URL  = process.env.TYPO3_BASE_URL      || 'https://v14.nr-mcp-agent.ddev.site:33001';
 const USER      = process.env.TYPO3_ADMIN_USER     || 'admin';
@@ -29,8 +30,9 @@ const PREVIEW   = process.env.PREVIEW === '1'; // headed + slow-mo, no GIF expor
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT_DIR   = path.resolve(__dirname, '../../Documentation/Images');
-// Local developer-only demo recorder; writes throwaway video frames to a temp dir. NOSONAR
-const TMP_DIR   = '/tmp/nr-mcp-demo'; // NOSONAR(typescript:S5443) build-only script, never runs in production
+// Local developer-only demo recorder; writes throwaway video frames to the
+// system temp dir (cross-platform, no hardcoded /tmp).
+const TMP_DIR   = path.join(os.tmpdir(), 'nr-mcp-demo');
 
 // ---------------------------------------------------------------------------
 // Helpers
