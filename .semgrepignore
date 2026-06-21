@@ -1,0 +1,30 @@
+# Opengrep / Semgrep exclude list for nr-mcp-agent.
+#
+# Consumed by the `security / SAST (Opengrep)` CI job (typo3-ci-workflows
+# security.yml). Opengrep scans production source; build artefacts, vendored
+# code and test fixtures are excluded to avoid false-positive findings.
+
+# Build artefacts and vendored code.
+.Build/
+.ddev/
+.idea/
+.vscode/
+node_modules/
+vendor/
+
+# Vendored third-party frontend libraries (e.g. the bundled marked.js parser) —
+# upstream code, not ours to scan (avoids false positives such as
+# detect-non-literal-regexp inside the library).
+Resources/Public/JavaScript/Vendor/
+
+# Test code is covered by our own test suites + PHPStan; opengrep's default
+# ruleset flags legitimate test patterns such as unlink() for fixture cleanup,
+# which is safe on static test paths.
+Tests/
+
+# Build / tooling scripts are reviewed manually and not shipped.
+Build/Scripts/
+Build/scripts/
+
+# Documentation renders shouldn't be scanned as source.
+Documentation-GENERATED-temp/
