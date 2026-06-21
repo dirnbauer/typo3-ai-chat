@@ -248,26 +248,7 @@ final readonly class ChatApiController
             return new JsonResponse(['error' => 'No file uploaded'], 400);
         }
 
-        $capabilities = $this->chatService->getProviderCapabilities();
-        // $capabilities['supportedFormats'] contains file extensions (e.g. 'png', 'jpg') because
-        // the frontend uses them for the <input accept> filter.  finfo returns MIME types, so we
-        // map extensions to MIME types before comparing.
-        $extensionMimeMap = [
-            'png'  => 'image/png',
-            'jpg'  => 'image/jpeg',
-            'jpeg' => 'image/jpeg',
-            'gif'  => 'image/gif',
-            'webp' => 'image/webp',
-            'pdf'  => 'application/pdf',
-        ];
-        $providerMimeTypes = array_values(array_filter(array_map(
-            static fn(string $ext): ?string => $extensionMimeMap[$ext] ?? null,
-            $capabilities['supportedFormats'],
-        )));
-        $allowedMimeTypes = array_values(array_unique(array_merge(
-            $providerMimeTypes,
-            $this->documentExtractorRegistry->getAvailableMimeTypes(),
-        )));
+        $allowedMimeTypes = $this->resolveAllowedMimeTypes();
 
         $maxSize = 20 * 1024 * 1024; // 20 MB
         if ($file->getSize() > $maxSize) {
@@ -521,6 +502,37 @@ final readonly class ChatApiController
         if ($conversation->getTitle() === '') {
             $conversation->setTitle($content);
         }
+    }
+
+    /**
+     * Builds the list of allowed upload MIME types from provider-supported formats
+     * (extensions mapped to MIME types) plus the document extractor MIME types.
+     *
+     * @return list<string>
+     */
+    private function resolveAllowedMimeTypes(): array
+    {
+        $capabilities = $this->chatService->getProviderCapabilities();
+        // $capabilities['supportedFormats'] contains file extensions (e.g. 'png', 'jpg') because
+        // the frontend uses them for the <input accept> filter.  finfo returns MIME types, so we
+        // map extensions to MIME types before comparing.
+        $extensionMimeMap = [
+            'png'  => 'image/png',
+            'jpg'  => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'gif'  => 'image/gif',
+            'webp' => 'image/webp',
+            'pdf'  => 'application/pdf',
+        ];
+        $providerMimeTypes = array_values(array_filter(array_map(
+            static fn(string $ext): ?string => $extensionMimeMap[$ext] ?? null,
+            $capabilities['supportedFormats'],
+        )));
+
+        return array_values(array_unique(array_merge(
+            $providerMimeTypes,
+            $this->documentExtractorRegistry->getAvailableMimeTypes(),
+        )));
     }
 
     private function checkAccess(): ?ResponseInterface
