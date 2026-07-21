@@ -61,7 +61,7 @@ final readonly class ChatToolbarItem implements ToolbarItemInterface, RequestAwa
         // Badge count is updated client-side from the status endpoint
         // to avoid a DB query on every backend page load.
         return '<span class="toolbar-item-link ai-chat-toolbar-btn" role="button" title="AI Chat" tabindex="0">'
-            . '<typo3-backend-icon identifier="actions-message" size="small"></typo3-backend-icon>'
+            . '<typo3-backend-icon identifier="toolbar-nr-mcp-agent" size="small"></typo3-backend-icon>'
             . '<span class="badge badge-warning ai-chat-badge" style="display:none">0</span>'
             . '</span>';
     }
