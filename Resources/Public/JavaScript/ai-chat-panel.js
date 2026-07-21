@@ -4,6 +4,7 @@ import {ref} from 'lit/directives/ref.js';
 import {lll} from '@typo3/core/lit-helper.js';
 import {ChatCoreController} from './chat-core.js';
 import {markdownStyles} from './markdown-styles.js';
+import {themeStyles} from './theme.js';
 import {AVATAR_ASSISTANT, AVATAR_USER, ICON_PAPERCLIP, ICON_SEND, ICON_COMPOSE, ICON_MINIMIZE, ICON_MAXIMIZE, ICON_RESTORE, ICON_CLOSE, ICON_CHEVRON_DOWN, ICON_UPLOAD} from './icons.js';
 
 const STATES = {HIDDEN: 'hidden', COLLAPSED: 'collapsed', EXPANDED: 'expanded', MAXIMIZED: 'maximized'};
@@ -35,14 +36,14 @@ export class AiChatPanel extends LitElement {
         _renamingUid: {state: true},
     };
 
-    static styles = [markdownStyles, css`
+    static styles = [themeStyles, markdownStyles, css`
         :host {
             position: fixed;
             z-index: calc(var(--typo3-zindex-modal-backdrop, 1050) - 10);
-            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.06);
+            box-shadow: var(--typo3-component-box-shadow-flyout, 0 4px 24px rgba(0, 0, 0, 0.18)), 0 0 0 1px var(--nr-chat-border);
             border-radius: 12px;
             font-family: var(--typo3-font-family, sans-serif);
-            background: var(--typo3-surface-container-lowest, #fff);
+            background: var(--nr-chat-surface);
             display: flex;
             flex-direction: column;
         }
@@ -88,7 +89,7 @@ export class AiChatPanel extends LitElement {
             opacity: 0.6;
         }
         .resize-grip:focus-visible {
-            outline: 2px solid var(--typo3-primary, #0078d4);
+            outline: 2px solid var(--nr-chat-focus-ring);
             outline-offset: -2px;
         }
         .resize-grip:focus-visible svg {
@@ -103,8 +104,8 @@ export class AiChatPanel extends LitElement {
             align-items: center;
             gap: 8px;
             padding: 0 12px;
-            background: linear-gradient(to bottom, var(--typo3-surface-container-low, #f5f5f5), color-mix(in srgb, var(--typo3-surface-container-low, #f5f5f5) 85%, transparent));
-            border-bottom: 1px solid var(--typo3-list-border-color, #ccc);
+            background: linear-gradient(to bottom, var(--nr-chat-surface-low), color-mix(in srgb, var(--nr-chat-surface-low) 85%, transparent));
+            border-bottom: 1px solid var(--nr-chat-border);
             cursor: grab;
             flex-shrink: 0;
             user-select: none;
@@ -139,10 +140,10 @@ export class AiChatPanel extends LitElement {
         .panel-sidebar {
             width: 260px;
             min-width: 260px;
-            border-right: 1px solid var(--typo3-list-border-color, #ccc);
+            border-right: 1px solid var(--nr-chat-border);
             display: flex;
             flex-direction: column;
-            background: var(--typo3-surface-container-low, #f5f5f5);
+            background: var(--nr-chat-surface-low);
             overflow: hidden;
         }
         .panel-sidebar-header {
@@ -150,7 +151,7 @@ export class AiChatPanel extends LitElement {
             align-items: center;
             justify-content: space-between;
             padding: 10px 12px;
-            border-bottom: 1px solid var(--typo3-list-border-color, #ccc);
+            border-bottom: 1px solid var(--nr-chat-border);
         }
         .panel-sidebar-header h3 {
             margin: 0;
@@ -167,20 +168,20 @@ export class AiChatPanel extends LitElement {
             gap: 8px;
             padding: 8px 12px;
             cursor: pointer;
-            border-bottom: 1px solid var(--typo3-list-border-color, #eee);
+            border-bottom: 1px solid var(--nr-chat-border);
             transition: background 0.15s;
             font-size: 12px;
         }
         .sidebar-item:hover,
         .sidebar-item:focus-visible {
-            background: var(--typo3-state-hover, rgba(0, 0, 0, 0.04));
+            background: var(--nr-chat-hover);
         }
         .sidebar-item:focus-visible {
-            outline: 2px solid var(--typo3-primary, #0078d4);
+            outline: 2px solid var(--nr-chat-focus-ring);
             outline-offset: -2px;
         }
         .sidebar-item.active {
-            background: var(--typo3-state-active, rgba(0, 0, 0, 0.08));
+            background: var(--nr-chat-active);
         }
         .sidebar-item .item-title {
             flex: 1;
@@ -207,8 +208,8 @@ export class AiChatPanel extends LitElement {
             align-items: center;
             gap: 6px;
             padding: 6px 10px;
-            border-bottom: 1px solid var(--typo3-list-border-color, #ccc);
-            background: var(--typo3-surface-container-low, #f5f5f5);
+            border-bottom: 1px solid var(--nr-chat-border);
+            background: var(--nr-chat-surface-low);
             flex-shrink: 0;
         }
         .select-wrap {
@@ -223,24 +224,24 @@ export class AiChatPanel extends LitElement {
             -webkit-appearance: none;
             width: 100%;
             padding: 5px 28px 5px 10px;
-            border: 1px solid var(--typo3-input-border-color, #ccc);
+            border: 1px solid var(--nr-chat-input-border);
             border-radius: 8px;
             font-size: 12px;
-            background: var(--typo3-surface-container-lowest, #fff);
+            background: var(--nr-chat-surface);
             cursor: pointer;
             min-width: 0;
             transition: border-color 0.15s;
         }
         .select-wrap select:focus {
             outline: none;
-            border-color: var(--typo3-primary, #0078d4);
-            box-shadow: 0 0 0 1px var(--typo3-primary, #0078d4);
+            border-color: var(--nr-chat-focus-ring);
+            box-shadow: 0 0 0 1px var(--nr-chat-focus-ring);
         }
         .select-wrap .chevron {
             position: absolute;
             right: 8px;
             pointer-events: none;
-            color: var(--typo3-text-color-variant, #666);
+            color: var(--nr-chat-text-variant);
             display: flex;
             align-items: center;
         }
@@ -251,8 +252,8 @@ export class AiChatPanel extends LitElement {
             flex-wrap: wrap;
             gap: 2px;
             padding: 4px 8px 0;
-            border-bottom: 1px solid var(--typo3-list-border-color, #ccc);
-            background: var(--typo3-surface-container-low, #f5f5f5);
+            border-bottom: 1px solid var(--nr-chat-border);
+            background: var(--nr-chat-surface-low);
             flex-shrink: 0;
         }
         .conv-tab {
@@ -268,18 +269,18 @@ export class AiChatPanel extends LitElement {
             white-space: nowrap;
             max-width: 140px;
             background: transparent;
-            color: var(--typo3-text-color-variant, #666);
+            color: var(--nr-chat-text-variant);
             transition: background 0.1s, color 0.1s;
             line-height: 1.3;
         }
         .conv-tab:hover {
-            background: var(--typo3-surface-container, #e8e8e8);
-            color: var(--typo3-text-color, #333);
+            background: var(--nr-chat-surface-base);
+            color: var(--nr-chat-text);
         }
         .conv-tab.active {
-            background: var(--typo3-surface-container-lowest, #fff);
-            color: var(--typo3-text-color, #333);
-            border-color: var(--typo3-list-border-color, #ccc);
+            background: var(--nr-chat-surface);
+            color: var(--nr-chat-text);
+            border-color: var(--nr-chat-border);
             font-weight: 500;
         }
         .conv-tab .tab-title {
@@ -293,9 +294,9 @@ export class AiChatPanel extends LitElement {
         }
         .conv-tab .tab-icon.status-processing,
         .conv-tab .tab-icon.status-tool_loop,
-        .conv-tab .tab-icon.status-locked { color: #1565c0; }
-        .conv-tab .tab-icon.status-failed  { color: #c62828; }
-        .conv-tab .tab-icon.status-idle    { color: #2e7d32; }
+        .conv-tab .tab-icon.status-locked { color: var(--nr-chat-status-info); }
+        .conv-tab .tab-icon.status-failed  { color: var(--nr-chat-status-danger); }
+        .conv-tab .tab-icon.status-idle    { color: var(--nr-chat-status-success); }
         .conv-tab .tab-close {
             flex-shrink: 0;
             display: none;
@@ -306,31 +307,31 @@ export class AiChatPanel extends LitElement {
             border-radius: 3px;
             font-size: 11px;
             line-height: 1;
-            color: var(--typo3-text-color-variant, #888);
+            color: var(--nr-chat-text-variant);
         }
         .conv-tab:hover .tab-close,
         .conv-tab.active .tab-close { display: flex; }
         .conv-tab .tab-close:hover {
-            background: var(--typo3-danger-bg, #ffebee);
-            color: #c62828;
+            background: var(--nr-chat-danger-bg);
+            color: var(--nr-chat-danger-text);
         }
         .conv-tab-new {
             flex-shrink: 0;
             margin-left: auto;
             padding: 4px 6px;
             border-radius: 6px;
-            color: var(--typo3-text-color-variant, #666);
+            color: var(--nr-chat-text-variant);
         }
-        .conv-tab-new:hover { color: var(--typo3-text-color, #333); }
+        .conv-tab-new:hover { color: var(--nr-chat-text); }
         .conv-tab .tab-rename-input {
             width: 90px;
             padding: 1px 4px;
             font-size: 12px;
-            border: 1px solid var(--typo3-primary, #0078d4);
+            border: 1px solid var(--nr-chat-focus-ring);
             border-radius: 3px;
             outline: none;
-            background: var(--typo3-surface-container-lowest, #fff);
-            color: var(--typo3-text-color, #333);
+            background: var(--nr-chat-surface);
+            color: var(--nr-chat-text);
         }
 
         /* Messages */
@@ -364,11 +365,11 @@ export class AiChatPanel extends LitElement {
             align-items: center;
             justify-content: center;
         }
-        .avatar-assistant { background: #0078d4; color: #fff; }
-        .avatar-user { background: var(--typo3-surface-container-high, #e0e0e0); color: #555; }
+        .avatar-assistant { background: var(--nr-chat-accent); color: var(--nr-chat-on-accent); }
+        .avatar-user { background: var(--nr-chat-surface-high); color: #555; }
         .message-time {
             font-size: 10px;
-            color: var(--typo3-text-color-variant, #999);
+            color: var(--nr-chat-text-variant);
             margin-top: 2px;
             padding: 0 2px;
         }
@@ -380,17 +381,17 @@ export class AiChatPanel extends LitElement {
             word-break: break-word;
         }
         .message.user {
-            background: #0078d4;
-            color: #fff;
+            background: var(--nr-chat-accent);
+            color: var(--nr-chat-on-accent);
             border-bottom-right-radius: 3px;
         }
         .message.assistant {
-            background: var(--typo3-surface-container-high, #e8e8e8);
+            background: var(--nr-chat-surface-high);
             border-bottom-left-radius: 3px;
         }
         .message.tool {
             align-self: flex-start;
-            background: var(--typo3-surface-container, #f0f0f0);
+            background: var(--nr-chat-surface-base);
             font-size: 11px;
             font-family: monospace;
             opacity: 0.5;
@@ -410,7 +411,7 @@ export class AiChatPanel extends LitElement {
             left: 0;
             right: 0;
             height: 24px;
-            background: linear-gradient(transparent, var(--typo3-surface-container, #f0f0f0));
+            background: linear-gradient(transparent, var(--nr-chat-surface-base));
             display: flex;
             align-items: flex-end;
             justify-content: center;
@@ -420,7 +421,7 @@ export class AiChatPanel extends LitElement {
         .message.system {
             align-self: center;
             font-size: 12px;
-            color: var(--typo3-text-color-variant, #666);
+            color: var(--nr-chat-text-variant);
             font-style: italic;
         }
 
@@ -430,7 +431,7 @@ export class AiChatPanel extends LitElement {
             gap: 3px;
             align-items: center;
             padding: 7px 10px;
-            background: var(--typo3-surface-container-high, #e8e8e8);
+            background: var(--nr-chat-surface-high);
             border-radius: 10px;
             border-bottom-left-radius: 3px;
             width: fit-content;
@@ -439,7 +440,7 @@ export class AiChatPanel extends LitElement {
             width: 5px;
             height: 5px;
             border-radius: 50%;
-            background: #888;
+            background: var(--nr-chat-text-variant);
             animation: typing-bounce 1.2s infinite ease-in-out;
         }
         .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
@@ -453,8 +454,8 @@ export class AiChatPanel extends LitElement {
         .file-badge {
             display: flex; align-items: center; gap: 6px;
             padding: 4px 8px; margin: 4px 12px 0;
-            background: var(--typo3-surface-container-low, #f5f5f5);
-            border: 1px solid var(--typo3-list-border-color, #ccc);
+            background: var(--nr-chat-surface-low);
+            border: 1px solid var(--nr-chat-border);
             border-radius: 6px; font-size: 12px;
         }
         .file-badge .file-badge-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -471,8 +472,8 @@ export class AiChatPanel extends LitElement {
             align-items: center;
             gap: 6px;
             padding: 8px 10px;
-            border-top: 1px solid var(--typo3-list-border-color, #ccc);
-            background: var(--typo3-surface-container-low, #f5f5f5);
+            border-top: 1px solid var(--nr-chat-border);
+            background: var(--nr-chat-surface-low);
             flex-shrink: 0;
         }
         .input-wrap {
@@ -480,15 +481,15 @@ export class AiChatPanel extends LitElement {
             display: flex;
             align-items: center;
             gap: 2px;
-            border: 1px solid var(--typo3-input-border-color, #ccc);
+            border: 1px solid var(--nr-chat-input-border);
             border-radius: 16px;
             padding: 3px 3px 3px 10px;
-            background: var(--typo3-surface-container-lowest, #fff);
+            background: var(--nr-chat-surface);
             transition: border-color 0.15s, box-shadow 0.15s;
         }
         .input-wrap:focus-within {
-            border-color: var(--typo3-primary, #0078d4);
-            box-shadow: 0 0 0 1px var(--typo3-primary, #0078d4);
+            border-color: var(--nr-chat-focus-ring);
+            box-shadow: 0 0 0 1px var(--nr-chat-focus-ring);
         }
         .input-wrap textarea {
             flex: 1;
@@ -512,9 +513,9 @@ export class AiChatPanel extends LitElement {
             height: 28px;
             border-radius: 50%;
             border: none;
-            background: #0078d4;
+            background: var(--nr-chat-accent);
             background-image: none;
-            color: #fff;
+            color: var(--nr-chat-on-accent);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -522,7 +523,7 @@ export class AiChatPanel extends LitElement {
             transition: background 0.15s, opacity 0.15s;
             margin: 0 1px 0 0;
         }
-        .btn-send:hover:not(:disabled) { background: #006abc; background-image: none; }
+        .btn-send:hover:not(:disabled) { background: var(--nr-chat-accent-hover); background-image: none; }
         .btn-send:disabled { opacity: 0.35; cursor: not-allowed; }
 
         /* Buttons */
@@ -532,29 +533,29 @@ export class AiChatPanel extends LitElement {
             justify-content: center;
             gap: 4px;
             padding: 6px 12px;
-            border: 1px solid var(--typo3-input-border-color, #ccc);
+            border: 1px solid var(--nr-chat-input-border);
             border-radius: 6px;
-            background: var(--typo3-surface-container-lowest, #fff);
+            background: var(--nr-chat-surface);
             cursor: pointer;
             font-size: 13px;
             white-space: nowrap;
             transition: background 0.15s;
         }
         .btn:hover {
-            background: var(--typo3-state-hover, rgba(0, 0, 0, 0.04));
+            background: var(--nr-chat-hover);
         }
         .btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
         }
         .btn-primary {
-            background: #0078d4;
-            color: #fff;
+            background: var(--nr-chat-accent);
+            color: var(--nr-chat-on-accent);
             border-color: transparent;
             border-radius: 8px;
         }
         .btn-primary:hover:not(:disabled) {
-            background: #006abc;
+            background: var(--nr-chat-accent-hover);
         }
         .btn-sm {
             padding: 4px 8px;
@@ -567,7 +568,7 @@ export class AiChatPanel extends LitElement {
             border-radius: 6px;
         }
         .btn-icon:hover {
-            background: var(--typo3-state-hover, rgba(0, 0, 0, 0.04));
+            background: var(--nr-chat-hover);
         }
 
         .attach-menu-wrap { position: relative; }
@@ -575,15 +576,15 @@ export class AiChatPanel extends LitElement {
             position: absolute;
             bottom: calc(100% + 4px);
             left: 0;
-            background: var(--typo3-component-background-color, #fff);
-            border: 1px solid var(--typo3-component-border-color, #ccc);
+            background: var(--nr-chat-surface);
+            border: 1px solid var(--nr-chat-border);
             border-radius: 4px;
             padding: 4px 0;
             margin: 0;
             list-style: none;
             white-space: nowrap;
             z-index: 100;
-            box-shadow: 0 2px 8px rgba(0,0,0,.15);
+            box-shadow: var(--typo3-component-box-shadow-flyout, 0 2px 8px rgba(0,0,0,.15));
         }
         .attach-menu li {
             display: flex;
@@ -594,7 +595,7 @@ export class AiChatPanel extends LitElement {
             font-size: 13px;
         }
         .attach-menu li:hover {
-            background: var(--typo3-component-hover-background-color, #f0f0f0);
+            background: var(--nr-chat-hover);
         }
 
         /* Status */
@@ -605,18 +606,18 @@ export class AiChatPanel extends LitElement {
             font-size: 12px;
             line-height: 1.4;
         }
-        .status-idle { background: #e8f5e9; color: #2e7d32; }
+        .status-idle { background: var(--nr-chat-success-bg); color: var(--nr-chat-success-text); }
         .status-processing, .status-locked, .status-tool_loop {
-            background: #fff3e0; color: #e65100;
+            background: var(--nr-chat-warning-bg); color: var(--nr-chat-warning-text);
         }
-        .status-failed { background: #ffebee; color: #c62828; }
+        .status-failed { background: var(--nr-chat-danger-bg); color: var(--nr-chat-danger-text); }
 
         .empty-state {
             flex: 1;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: var(--typo3-text-color-variant, #666);
+            color: var(--nr-chat-text-variant);
             font-size: 13px;
             text-align: center;
             padding: 16px;
@@ -624,10 +625,10 @@ export class AiChatPanel extends LitElement {
 
         .issues-banner {
             padding: 6px 12px;
-            background: #fff3e0;
-            border-bottom: 1px solid #ffe0b2;
+            background: var(--nr-chat-warning-bg);
+            border-bottom: 1px solid var(--nr-chat-warning-border);
             font-size: 12px;
-            color: #e65100;
+            color: var(--nr-chat-warning-text);
             flex-shrink: 0;
         }
 
@@ -635,8 +636,8 @@ export class AiChatPanel extends LitElement {
             display: inline-block;
             width: 12px;
             height: 12px;
-            border: 2px solid rgba(0, 0, 0, 0.1);
-            border-top-color: #0078d4;
+            border: 2px solid color-mix(in srgb, currentColor 15%, transparent);
+            border-top-color: var(--nr-chat-accent);
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
         }
@@ -1252,7 +1253,7 @@ export class AiChatPanel extends LitElement {
                     </div>
                 ` : nothing}
                 ${this.chat.errorMessage ? html`
-                    <div class="message system" style="color:#c62828;">
+                    <div class="message system" style="color:var(--nr-chat-status-danger, #c62828);">
                         Error: ${this.chat.errorMessage}
                         ${isResumable ? html`
                             <button class="btn btn-sm" @click=${() => this.chat.handleResume()}
