@@ -428,13 +428,13 @@ export class ChatCoreController {
         Object.assign(this._falPickerOverlay.style, {
             position: 'fixed', inset: '0', zIndex: '9999',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'rgba(0,0,0,.5)',
+            background: 'color-mix(in srgb, var(--typo3-overlay-bg, #000) 50%, transparent)',
         });
 
         const box = document.createElement('div');
         Object.assign(box.style, {
             width: '900px', height: '600px', maxWidth: '95vw', maxHeight: '90vh',
-            background: '#fff', borderRadius: '4px', overflow: 'hidden',
+            background: 'var(--typo3-surface-container-lowest, #fff)', borderRadius: '4px', overflow: 'hidden',
             display: 'flex', flexDirection: 'column',
         });
 

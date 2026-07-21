@@ -12,7 +12,7 @@ return [
         'readOnly' => true,
         'adminOnly' => true,
         'rootLevel' => 1,
-        'iconfile' => 'EXT:nr_mcp_agent/Resources/Public/Icons/Extension.svg',
+        'iconfile' => 'EXT:nr_mcp_agent/Resources/Public/Icons/ModuleIcon.svg',
         'searchFields' => 'title',
     ],
     'types' => [
