@@ -1,4 +1,14 @@
-/* Module-level layout override: remove default padding from TYPO3 module body */
+/* Module-level layout: remove default padding and let the chat host fill the
+ * full height of the module body (a grid 1fr track), so the chat uses the
+ * whole backend viewport instead of a fixed magic-number height. */
 .module[data-module-name="nr_mcp_agent_chat"] .module-body {
     padding: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.module[data-module-name="nr_mcp_agent_chat"] nr-chat-app {
+    flex: 1 1 auto;
+    min-height: 0;
 }
