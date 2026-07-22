@@ -1,6 +1,24 @@
-/* Module-level layout: remove default padding and let the chat host fill the
- * full height of the module body (a grid 1fr track), so the chat uses the
- * whole backend viewport instead of a fixed magic-number height. */
+/* The AI Chat module renders as a standalone document (the backend module
+ * iframe) whose body is just <body><nr-chat-app>. For :host{height:100%} on the
+ * component to resolve, html/body must be full height. Scope this with :has()
+ * to the standalone case (nr-chat-app is a direct child of body) so it never
+ * touches a regular backend document where the chat might be embedded deeper. */
+html:has(> body > nr-chat-app) {
+    height: 100%;
+}
+
+body:has(> nr-chat-app) {
+    height: 100%;
+    margin: 0;
+}
+
+body:has(> nr-chat-app) > nr-chat-app {
+    display: block;
+    height: 100%;
+}
+
+/* When embedded inside a regular backend module body (grid 1fr track), let the
+ * host fill that track instead of relying on a fixed height. */
 .module[data-module-name="nr_mcp_agent_chat"] .module-body {
     padding: 0;
     display: flex;
