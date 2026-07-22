@@ -12,10 +12,12 @@ body:has(> nr-chat-app) {
     margin: 0;
 }
 
-body:has(> nr-chat-app) > nr-chat-app {
-    display: block;
-    height: 100%;
-}
+/* Do NOT set display/height on nr-chat-app from here: a light-DOM rule on the
+ * host wins over the component's own `:host { display: flex; height: 100% }`.
+ * Setting `display: block` collapsed the inner flex column so `.chat-body`
+ * (flex: 1) no longer stretched — the host filled the iframe but the chat body
+ * stayed at content height. With html/body full-height, `:host` already sizes
+ * and lays out the host correctly. */
 
 /* When embedded inside a regular backend module body (grid 1fr track), let the
  * host fill that track instead of relying on a fixed height. */
