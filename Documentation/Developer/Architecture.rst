@@ -30,24 +30,18 @@ System overview
         v
     ChatService
         |
-        |--- resolveProvider()
-        |        |
-        |        v
-        |    Task --> Configuration --> Model (nr-llm DB)
-        |        |
-        |        v
-        |    ProviderAdapterRegistry (nr-llm)
-        |        |
-        |        v
-        |    LLM Provider (OpenAI, Anthropic, ...)
+        | resolve Task --> Configuration (nr-llm DB)
+        | build system prompt + transcript
+        v
+    nr-llm AgentRuntime::run(configuration, messages, beUserUid)
         |
-        |--- McpToolProvider
+        |--- LLM Provider (OpenAI, Anthropic, ...)
+        |
+        |--- nr-llm ToolRegistry (builtin backend tools)
                  |
                  v
-            MCP Server (hn/typo3-mcp-server)
-                 |
-                 v
-            TYPO3 Content (pages, tt_content, ...)
+            Logs, exceptions, system status, records,
+            page content, ... (RBAC + tool gate enforced)
 
 The frontend (a Lit web component) communicates with the
 backend exclusively through polling. There are no
@@ -86,8 +80,8 @@ Message processing happens in CLI context
 (``ai-chat:process`` or ``ai-chat:worker``), not in the
 web request. This design:
 
-*   Avoids PHP timeout issues -- LLM calls and MCP tool
-    execution can take many seconds.
+*   Avoids PHP timeout issues -- the LLM calls and tool
+    execution in the agent run can take many seconds.
 *   Keeps the web server responsive -- no long-running
     HTTP connections.
 *   Allows the worker mode to reuse a single process
@@ -161,36 +155,45 @@ The central entity. Stored in
 System prompt priority
 ----------------------
 
-The system prompt sent to the LLM is resolved in this order:
+The system prompt is composed in this order:
 
-1.  **Conversation-level prompt** -- If a conversation has a
-    custom ``system_prompt`` set, it takes highest priority.
-2.  **nr-llm Configuration + Task prompts** -- The
+1.  **Identity / behaviour contract** -- Always prepended. A
+    fixed block establishes that the assistant is the
+    Netresearch TYPO3 Backend AI Chat, steers it to use its
+    tools instead of asking the user to paste data, forbids
+    it from claiming to be ChatGPT/OpenAI, and tells it to
+    answer in the user's language. This holds regardless of
+    how the Task/Configuration prompt is set.
+2.  **Conversation-level prompt** -- If a conversation has a
+    custom ``system_prompt`` set, it is used in place of the
+    Configuration/Task prompts.
+3.  **nr-llm Configuration + Task prompts** -- Otherwise the
     ``system_prompt`` from the nr-llm Configuration record
     and the ``prompt_template`` from the Task record are
-    combined (separated by a blank line). Configure these
-    in the TYPO3 backend to provide tool usage instructions
-    or persona definitions.
-3.  **Locale-based fallback** -- If nothing is configured,
-    a default prompt is used based on the backend user's
-    language setting (German or English).
+    combined (separated by a blank line). Configure these in
+    the TYPO3 backend to provide tool usage instructions or
+    persona definitions.
 
-Provider resolution
--------------------
+The site-language context is appended in every case.
 
-``ChatService`` resolves the LLM provider through the nr-llm
-database chain:
+Configuration resolution
+-------------------------
 
-1.  Read the Task record (by ``llmTaskUid`` from extension
-    configuration).
-2.  Follow ``Task → Configuration → Model`` via foreign keys.
-3.  Use ``ProviderAdapterRegistry::createAdapterFromModel()``
-    to create a fully configured provider instance (with API
-    key from nr-vault).
+``ChatService`` resolves the ``LlmConfiguration`` the chat
+runs against, and the prompts, through nr-llm:
 
-The Configuration's ``system_prompt`` and the Task's
-``prompt_template`` are fetched in the same query and used
-by ``buildSystemPrompt()``.
+1.  Load the Task record via nr-llm's ``TaskRepository`` (by
+    ``llmTaskUid`` from extension configuration).
+2.  Take ``Task::getConfiguration()`` as the ``LlmConfiguration``
+    passed to ``AgentRuntime::run()``. A missing Task or
+    Configuration fails the turn loudly.
+3.  The Configuration's ``system_prompt`` and the Task's
+    ``prompt_template`` feed ``buildSystemPrompt()``.
+
+A provider adapter is still created from the Configuration's
+model (via ``ProviderAdapterRegistry``) — but only to expand
+file attachments and report supported formats; the chat turn
+itself runs inside nr-llm's ``AgentRuntime``.
 
 ``archived``
     Whether the conversation is archived.
@@ -217,8 +220,11 @@ The conversation lifecycle is modeled as a state enum:
     Reserved by a worker process for dequeue.
 
 ``tool_loop``
-    The LLM requested tool calls; the system is
-    executing MCP tools and will call the LLM again.
+    Legacy transitional state. The tool loop now runs
+    synchronously inside nr-llm's ``AgentRuntime`` within a
+    single ``processing`` turn, so the chat no longer parks a
+    conversation here; the state is retained for backward
+    compatibility.
 
 ``failed``
     An error occurred. The user can retry by sending
@@ -271,7 +277,7 @@ File attachment flow
         |     else
         |       → DocumentExtractorRegistry::extract() → plain-text block
         v
-    LLM Provider (multimodal chatCompletion call)
+    nr-llm AgentRuntime (multimodal messages forwarded to the provider)
 
 ``ChatService::getProviderCapabilities()`` queries the active provider for
 its supported formats. It calls ``VisionCapableInterface::getSupportedImageFormats()``

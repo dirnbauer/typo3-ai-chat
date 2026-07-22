@@ -4,115 +4,69 @@
 Agent loop
 ==========
 
-``ChatService`` has two processing paths that are selected
-automatically based on whether MCP tools are available.
+Since version 0.6.3 the backend AI Chat does not run its own tool loop.
+``ChatService`` delegates the whole chat turn to nr-llm's ``AgentRuntime``
+(nr-llm ADR-101), which drives the model over nr-llm's builtin tool
+registry and returns the settled result synchronously.
 
-Simple chat (no tools)
-======================
+Processing a turn
+=================
 
-When MCP is disabled or the MCP server provides no tools,
-``runSimpleChat()`` is used. This is a fast path that:
+``ChatService::processConversation()`` performs the following steps:
 
-1.  Resolves the LLM provider via the nr-llm DB chain.
-2.  Builds the system prompt (see Architecture > System
-    prompt priority).
-3.  Prepends the system prompt as a ``system`` message.
-4.  Calls ``ProviderInterface::chatCompletion()``.
-5.  Appends the response and sets status to ``idle``.
+1.  If no nr-llm Task is configured (``llmTaskUid`` is ``0``), the
+    conversation is set to ``failed`` with a descriptive message.
+2.  Resolve the ``LlmConfiguration`` the chat should use from the
+    configured Task (``llmTaskUid`` -> ``Task`` -> ``getConfiguration()``).
+    A missing Task or Configuration fails loudly rather than silently
+    degrading to a no-tools chat.
+3.  Set the conversation status to ``processing``.
+4.  Build the message transcript: a ``system`` message carrying the
+    identity/behaviour contract and the resolved Task/Configuration
+    prompts (see Architecture > System prompt priority), followed by the
+    stored conversation messages. File attachments are expanded to the
+    multimodal wire shape and forwarded as array messages.
+5.  Call ``AgentRuntimeInterface::run()`` with an ``AgentRunRequest`` built
+    from the configuration, the messages and the initiating backend user
+    uid. ``allowedToolNames`` is left at ``null`` so the run is offered the
+    whole globally-enabled tool set; nr-llm's own tool gate (RBAC,
+    global enable cascade, per-configuration groups) stays authoritative.
+6.  Map the returned ``AgentRunResult`` onto the conversation.
 
-Agent loop (with tools)
-=======================
+Outcome mapping
+===============
 
-When MCP is enabled and tools are available,
-``runAgentLoop()`` is used. It orchestrates the
-interaction between the LLM and MCP tools.
+``AgentRuntime::run()`` never throws for a run outcome; it returns a
+settled ``AgentRunResult``. ``ChatService`` maps it as follows:
 
-Flow
-----
+*   ``COMPLETED`` -- append the final assistant answer
+    (``ToolLoopResult::$finalContent``) and set status ``idle``.
+*   any other outcome (``FAILED``, ``GUARDRAIL_BLOCKED``,
+    ``AWAITING_APPROVAL``, …) -- set status ``failed`` with a sanitized
+    reason taken from ``AgentRunResult::$error`` or derived from the
+    outcome. The mapping keeps a default arm because ``AgentRunOutcome``
+    gains cases in nr-llm minor releases.
 
-::
+The tools the model can call, their execution, retry/back-off on
+transient provider errors, budget enforcement and the iteration cap all
+live inside nr-llm now.
 
-    1. Set status to "processing"
-    2. Resolve provider and build system prompt
-    3. LOOP (max 20 iterations):
-       a. Send messages + tools to LLM (with retry)
-       b. IF response has tool calls:
-          - Save assistant message with tool_calls
-          - Set status to "tool_loop"
-          - Execute each tool via McpToolProvider
-          - Append tool results to messages
-          - Save and CONTINUE loop
-       c. ELSE (plain text response):
-          - Append assistant message
-          - Set status to "idle"
-          - RETURN
-    4. If max iterations reached:
-       - Set status to "failed"
-       - Set error "Max tool iterations reached"
+Synchronous execution and resume
+================================
 
-LLM retry logic
-================
-
-The LLM call includes automatic retry for transient
-errors:
-
-*   **Max retries:** 2 (3 total attempts)
-*   **Retry delay:** 3 seconds, increasing linearly
-    (3s, 6s)
-*   **Retried errors:** HTTP 429, HTTP 503, messages
-    containing "rate" or "overloaded"
-*   **Non-transient errors:** Thrown immediately without
-    retry
-
-Crash recovery
-==============
-
-The agent loop persists state after every significant
-operation. This table shows what happens if the process
-crashes at each point:
-
-.. list-table:: Crash recovery behavior
-   :header-rows: 1
-   :widths: 30 20 50
-
-   *  -  Crash point
-      -  Status in DB
-      -  Recovery
-   *  -  Before LLM call
-      -  ``processing``
-      -  Cleanup marks as ``failed`` after 5 min.
-         User retries.
-   *  -  During LLM call
-      -  ``processing``
-      -  Same as above.
-   *  -  After tool_calls saved
-      -  ``tool_loop``
-      -  On retry, ``resumeConversation()`` detects
-         pending tool calls and executes them first.
-   *  -  During tool execution
-      -  ``tool_loop``
-      -  Same as above. Tools are re-executed.
-   *  -  After tool results saved
-      -  ``tool_loop``
-      -  Loop continues normally on retry.
+``AgentRuntime::run()`` is synchronous and drives the entire tool loop in
+one call, so a turn never leaves persisted "pending tool calls" in the
+conversation. The CLI worker (``ai-chat:process`` / ``ai-chat:worker``)
+therefore always calls ``processConversation()``.
+``resumeConversation()`` re-runs the turn over the existing transcript
+for a resumable conversation (``processing``, ``tool_loop`` or
+``failed``), which is used to recover a conversation left ``processing``
+by a crashed worker.
 
 MCP tool provider
 =================
 
-``McpToolProviderInterface`` abstracts the MCP server
-connection. The default implementation
-(``McpToolProvider``) manages the MCP server as a
-subprocess:
-
-1.  **connect()** -- Starts the MCP server process and
-    performs the MCP initialization handshake.
-2.  **getToolDefinitions()** -- Retrieves available tools
-    from the MCP server (``tools/list``).
-3.  **executeTool()** -- Calls a specific tool with
-    arguments (``tools/call``).
-4.  **disconnect()** -- Shuts down the MCP server
-    process.
-
-When MCP is disabled in the extension configuration,
-the tool provider returns no tools and ChatService
-uses the simple chat path instead of the agent loop.
+The ``McpToolProvider`` / ``McpConnection`` classes remain in the
+codebase but are no longer used by the chat turn. Direct MCP-server
+tooling for the backend is superseded by nr-llm's builtin tool registry;
+the MCP integration is retained for the planned move into nr-llm.
