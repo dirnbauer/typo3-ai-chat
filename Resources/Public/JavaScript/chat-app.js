@@ -23,7 +23,7 @@ export class ChatApp extends LitElement {
         :host {
             display: flex;
             flex-direction: column;
-            height: calc(100vh - 200px);
+            height: 100%;
             min-height: 400px;
             border: 1px solid var(--nr-chat-border);
             border-radius: 4px;
@@ -629,7 +629,7 @@ export class ChatApp extends LitElement {
                         @keydown=${this._handleKeydown}
                         placeholder="${lll('chat.placeholder')}"
                         aria-label="${lll('chat.placeholder')}"
-                        ?disabled=${!this.chat.available || this.chat.isProcessing()}
+                        ?disabled=${!this.chat.available}
                         maxlength=${this.maxLength > 0 ? this.maxLength : nothing}
                         rows="2"
                     ></textarea>
