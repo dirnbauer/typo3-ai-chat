@@ -4,15 +4,17 @@ declare(strict_types=1);
 
 namespace Netresearch\NrMcpAgent\Tests\Unit\Command;
 
+use Netresearch\NrLlm\Domain\Model\LlmConfiguration;
 use Netresearch\NrLlm\Domain\Model\Model as LlmModel;
+use Netresearch\NrLlm\Domain\Model\Task;
+use Netresearch\NrLlm\Domain\Repository\TaskRepository;
 use Netresearch\NrLlm\Provider\Contract\ProviderInterface;
 use Netresearch\NrLlm\Provider\ProviderAdapterRegistryInterface;
+use Netresearch\NrLlm\Service\Agent\AgentRuntimeInterface;
 use Netresearch\NrMcpAgent\Command\ChatWorkerCommand;
 use Netresearch\NrMcpAgent\Configuration\ExtensionConfiguration;
 use Netresearch\NrMcpAgent\Document\DocumentExtractorRegistry;
 use Netresearch\NrMcpAgent\Domain\Repository\ConversationRepository;
-use Netresearch\NrMcpAgent\Domain\Repository\LlmTaskRepository;
-use Netresearch\NrMcpAgent\Mcp\McpToolProviderInterface;
 use Netresearch\NrMcpAgent\Service\ChatService;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -107,20 +109,18 @@ class ChatWorkerCommandTest extends TestCase
         $chatRepository = $this->createMock(ConversationRepository::class);
         $config = $this->createStub(ExtensionConfiguration::class);
         $config->method('getLlmTaskUid')->willReturn(0);
-        $config->method('isMcpEnabled')->willReturn(false);
-        $mcpProvider = $this->createMock(McpToolProviderInterface::class);
 
-        $llmTaskRepository = $this->createMock(LlmTaskRepository::class);
-        $llmTaskRepository->method('resolveModelByTaskUid')->willReturn([
-            'model' => $this->createMock(LlmModel::class),
-            'systemPrompt' => '',
-            'promptTemplate' => '',
-        ]);
+        $configuration = $this->createMock(LlmConfiguration::class);
+        $configuration->method('getLlmModel')->willReturn($this->createMock(LlmModel::class));
+        $task = $this->createMock(Task::class);
+        $task->method('getConfiguration')->willReturn($configuration);
+        $taskRepository = $this->createMock(TaskRepository::class);
+        $taskRepository->method('findByUid')->willReturn($task);
 
         $adapterRegistry = $this->createMock(ProviderAdapterRegistryInterface::class);
         $adapterRegistry->method('createAdapterFromModel')->willReturn($this->createMock(ProviderInterface::class));
 
-        $chatService = new ChatService($chatRepository, $config, $mcpProvider, $llmTaskRepository, $adapterRegistry, $this->createMock(ResourceFactory::class), $this->createMock(SiteFinder::class), new DocumentExtractorRegistry([]));
+        $chatService = new ChatService($chatRepository, $config, $this->createMock(AgentRuntimeInterface::class), $taskRepository, $adapterRegistry, $this->createMock(ResourceFactory::class), $this->createMock(SiteFinder::class), new DocumentExtractorRegistry([]));
         $repository = $this->createMock(ConversationRepository::class);
         $connectionPool = $this->createMock(ConnectionPool::class);
 

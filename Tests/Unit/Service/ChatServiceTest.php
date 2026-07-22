@@ -4,27 +4,32 @@ declare(strict_types=1);
 
 namespace Netresearch\NrMcpAgent\Tests\Unit\Service;
 
-use Netresearch\NrLlm\Domain\Model\CompletionResponse;
+use Netresearch\NrLlm\Domain\Enum\AgentRunOutcome;
+use Netresearch\NrLlm\Domain\Model\LlmConfiguration;
 use Netresearch\NrLlm\Domain\Model\Model as LlmModel;
+use Netresearch\NrLlm\Domain\Model\Task;
 use Netresearch\NrLlm\Domain\Model\UsageStatistics;
+use Netresearch\NrLlm\Domain\Repository\TaskRepository;
+use Netresearch\NrLlm\Domain\ValueObject\ChatMessage;
+use Netresearch\NrLlm\Domain\ValueObject\ToolLoopResult;
 use Netresearch\NrLlm\Provider\Contract\DocumentCapableInterface;
 use Netresearch\NrLlm\Provider\Contract\ProviderInterface;
 use Netresearch\NrLlm\Provider\Contract\VisionCapableInterface;
 use Netresearch\NrLlm\Provider\ProviderAdapterRegistryInterface;
+use Netresearch\NrLlm\Service\Agent\AgentRunRequest;
+use Netresearch\NrLlm\Service\Agent\AgentRunResult;
+use Netresearch\NrLlm\Service\Agent\AgentRuntimeInterface;
 use Netresearch\NrMcpAgent\Configuration\ExtensionConfiguration;
 use Netresearch\NrMcpAgent\Document\DocumentExtractorRegistry;
 use Netresearch\NrMcpAgent\Domain\Model\Conversation;
 use Netresearch\NrMcpAgent\Domain\Repository\ConversationRepository;
-use Netresearch\NrMcpAgent\Domain\Repository\LlmTaskRepository;
 use Netresearch\NrMcpAgent\Enum\ConversationStatus;
 use Netresearch\NrMcpAgent\Enum\MessageRole;
-use Netresearch\NrMcpAgent\Mcp\McpToolProviderInterface;
 use Netresearch\NrMcpAgent\Service\ChatService;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use RuntimeException;
-use stdClass;
 use TYPO3\CMS\Core\Localization\Locale;
 use TYPO3\CMS\Core\Resource\File;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
@@ -34,13 +39,19 @@ use TYPO3\CMS\Core\Site\SiteFinder;
 
 class ChatServiceTest extends TestCase
 {
-    private function createCompletionResponse(string $content = 'Hi!', ?array $toolCalls = null): CompletionResponse
+    /** The AgentRunRequest captured by the mocked AgentRuntime, for inspection. */
+    private ?AgentRunRequest $capturedRequest = null;
+
+    /** The LlmConfiguration the mocked TaskRepository resolves; asserted identity-equal. */
+    private ?LlmConfiguration $configuration = null;
+
+    private function completedResult(string $text = 'Hi there!'): AgentRunResult
     {
-        return new CompletionResponse(
-            content: $content,
-            model: 'test-model',
-            usage: new UsageStatistics(10, 20, 30),
-            toolCalls: $toolCalls,
+        return new AgentRunResult(
+            AgentRunOutcome::COMPLETED,
+            'run-uuid',
+            [],
+            new ToolLoopResult($text, [], 1, false, new UsageStatistics(10, 20, 30)),
         );
     }
 
@@ -48,36 +59,79 @@ class ChatServiceTest extends TestCase
      * @param array{system_prompt?: string, prompt_template?: string} $prompts
      */
     private function createChatService(
-        ProviderInterface $provider,
+        ?AgentRunResult $result = null,
         ?ConversationRepository $repository = null,
         ?ExtensionConfiguration $config = null,
-        ?McpToolProviderInterface $mcpProvider = null,
         array $prompts = [],
+        ?ProviderInterface $provider = null,
         ?ResourceFactory $resourceFactory = null,
         ?SiteFinder $siteFinder = null,
+        ?DocumentExtractorRegistry $registry = null,
+        ?TaskRepository $taskRepository = null,
     ): ChatService {
         $repository ??= $this->createMock(ConversationRepository::class);
         if ($config === null) {
             $config = $this->createStub(ExtensionConfiguration::class);
             $config->method('getLlmTaskUid')->willReturn(1);
-            $config->method('isMcpEnabled')->willReturn(false);
         }
-        $mcpProvider ??= $this->createMock(McpToolProviderInterface::class);
         $resourceFactory ??= $this->createMock(ResourceFactory::class);
         $siteFinder ??= $this->createMock(SiteFinder::class);
+        $registry ??= new DocumentExtractorRegistry([]);
+        $provider ??= $this->createMock(ProviderInterface::class);
 
-        $model = $this->createMock(LlmModel::class);
-        $llmTaskRepository = $this->createMock(LlmTaskRepository::class);
-        $llmTaskRepository->method('resolveModelByTaskUid')->willReturn([
-            'model' => $model,
-            'systemPrompt' => $prompts['system_prompt'] ?? '',
-            'promptTemplate' => $prompts['prompt_template'] ?? '',
-        ]);
+        $agentRuntime = $this->createMock(AgentRuntimeInterface::class);
+        $agentRuntime->method('run')->willReturnCallback(
+            function (AgentRunRequest $request) use ($result): AgentRunResult {
+                $this->capturedRequest = $request;
+                return $result ?? $this->completedResult();
+            },
+        );
+
+        if ($taskRepository === null) {
+            $model = $this->createMock(LlmModel::class);
+            $this->configuration = $this->createMock(LlmConfiguration::class);
+            $this->configuration->method('getSystemPrompt')->willReturn($prompts['system_prompt'] ?? '');
+            $this->configuration->method('getLlmModel')->willReturn($model);
+
+            $task = $this->createMock(Task::class);
+            $task->method('getConfiguration')->willReturn($this->configuration);
+            $task->method('getPromptTemplate')->willReturn($prompts['prompt_template'] ?? '');
+
+            $taskRepository = $this->createMock(TaskRepository::class);
+            $taskRepository->method('findByUid')->willReturn($task);
+        }
 
         $adapterRegistry = $this->createMock(ProviderAdapterRegistryInterface::class);
         $adapterRegistry->method('createAdapterFromModel')->willReturn($provider);
 
-        return new ChatService($repository, $config, $mcpProvider, $llmTaskRepository, $adapterRegistry, $resourceFactory, $siteFinder, new DocumentExtractorRegistry([]));
+        return new ChatService($repository, $config, $agentRuntime, $taskRepository, $adapterRegistry, $resourceFactory, $siteFinder, $registry);
+    }
+
+    /**
+     * The system prompt the AgentRuntime was invoked with (messages[0]).
+     */
+    private function capturedSystemPrompt(): string
+    {
+        self::assertNotNull($this->capturedRequest);
+        $system = $this->capturedRequest->messages[0] ?? null;
+        self::assertInstanceOf(ChatMessage::class, $system);
+        self::assertTrue($system->isSystem());
+        return $system->content;
+    }
+
+    /**
+     * The last message the AgentRuntime was invoked with — the user turn (array shape).
+     *
+     * @return array<string, mixed>
+     */
+    private function capturedUserMessage(): array
+    {
+        self::assertNotNull($this->capturedRequest);
+        // Copy out of the readonly property before end() moves the array pointer.
+        $messages = $this->capturedRequest->messages;
+        $last = end($messages);
+        self::assertIsArray($last);
+        return $last;
     }
 
     /**
@@ -107,35 +161,94 @@ class ChatServiceTest extends TestCase
         return $siteFinder;
     }
 
-    private function createMcpEnabledConfig(): ExtensionConfiguration
-    {
-        $config = $this->createStub(ExtensionConfiguration::class);
-        $config->method('getLlmTaskUid')->willReturn(1);
-        $config->method('isMcpEnabled')->willReturn(true);
-        return $config;
-    }
+    // -------------------------------------------------------------------------
+    // Outcome mapping
+    // -------------------------------------------------------------------------
 
     #[Test]
-    public function processConversationSetsIdleOnSimpleResponse(): void
+    public function processConversationAppendsFinalAnswerAndSetsIdleOnCompletion(): void
     {
         $conversation = new Conversation();
         $conversation->setBeUser(1);
         $conversation->appendMessage(MessageRole::User, 'Hello');
 
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->expects(self::once())->method('chatCompletion')
-            ->willReturn($this->createCompletionResponse('Hi there!'));
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        $service = $this->createChatService($provider);
+        $service = $this->createChatService($this->completedResult('Final answer.'));
         $service->processConversation($conversation);
 
         self::assertSame(ConversationStatus::Idle, $conversation->getStatus());
         self::assertSame(2, $conversation->getMessageCount());
+        $messages = $conversation->getDecodedMessages();
+        $assistant = end($messages);
+        self::assertSame('assistant', $assistant['role']);
+        self::assertSame('Final answer.', $assistant['content']);
+    }
 
-        unset($GLOBALS['BE_USER']);
+    #[Test]
+    public function processConversationInvokesAgentRuntimeWithResolvedConfigurationAndBeUser(): void
+    {
+        $conversation = new Conversation();
+        $conversation->setBeUser(42);
+        $conversation->appendMessage(MessageRole::User, 'Hello');
+
+        $service = $this->createChatService();
+        $service->processConversation($conversation);
+
+        self::assertNotNull($this->capturedRequest);
+        self::assertSame($this->configuration, $this->capturedRequest->configuration);
+        // null allowed-tool list => offer the whole registered/enabled set.
+        self::assertNull($this->capturedRequest->allowedToolNames);
+        self::assertSame(42, $this->capturedRequest->beUserUid);
+    }
+
+    #[Test]
+    public function systemMessageCarriesNetresearchIdentityAndToolSteering(): void
+    {
+        $conversation = new Conversation();
+        $conversation->setBeUser(1);
+        $conversation->appendMessage(MessageRole::User, 'Hello');
+
+        $service = $this->createChatService();
+        $service->processConversation($conversation);
+
+        $system = $this->capturedSystemPrompt();
+        self::assertStringContainsString('TYPO3 Backend AI Chat by Netresearch', $system);
+        self::assertStringContainsString('USE the appropriate tool', $system);
+        self::assertStringContainsString('Never claim to be ChatGPT', $system);
+    }
+
+    #[Test]
+    public function userMessageIsForwardedToAgentRuntime(): void
+    {
+        $conversation = new Conversation();
+        $conversation->setBeUser(1);
+        $conversation->appendMessage(MessageRole::User, 'What is the weather?');
+
+        $service = $this->createChatService();
+        $service->processConversation($conversation);
+
+        $userMsg = $this->capturedUserMessage();
+        self::assertSame('user', $userMsg['role']);
+        self::assertSame('What is the weather?', $userMsg['content']);
+    }
+
+    #[Test]
+    public function processConversationSetsProcessingStatusAtStart(): void
+    {
+        $conversation = Conversation::fromRow([
+            'uid' => 10,
+            'be_user' => 7,
+            'status' => 'processing',
+            'messages' => json_encode([['role' => 'user', 'content' => 'Hi']]),
+            'message_count' => 1,
+        ]);
+
+        $repository = $this->createMock(ConversationRepository::class);
+        $repository->expects(self::once())
+            ->method('updateStatus')
+            ->with(10, ConversationStatus::Processing, 7);
+
+        $service = $this->createChatService(repository: $repository);
+        $service->processConversation($conversation);
     }
 
     #[Test]
@@ -148,13 +261,141 @@ class ChatServiceTest extends TestCase
         $config = $this->createStub(ExtensionConfiguration::class);
         $config->method('getLlmTaskUid')->willReturn(0);
 
-        $provider = $this->createMock(ProviderInterface::class);
-        $service = $this->createChatService($provider, config: $config);
+        $service = $this->createChatService(config: $config);
         $service->processConversation($conversation);
 
         self::assertSame(ConversationStatus::Failed, $conversation->getStatus());
         self::assertStringContainsString('nr-llm Task', $conversation->getErrorMessage());
     }
+
+    #[Test]
+    public function processConversationSetsFailedWhenTaskNotFound(): void
+    {
+        $conversation = new Conversation();
+        $conversation->setBeUser(1);
+        $conversation->appendMessage(MessageRole::User, 'Hello');
+
+        $taskRepository = $this->createMock(TaskRepository::class);
+        $taskRepository->method('findByUid')->willReturn(null);
+
+        $service = $this->createChatService(taskRepository: $taskRepository);
+        $service->processConversation($conversation);
+
+        self::assertSame(ConversationStatus::Failed, $conversation->getStatus());
+        self::assertStringContainsString('not found', $conversation->getErrorMessage());
+    }
+
+    #[Test]
+    public function processConversationSetsFailedWhenConfigurationMissing(): void
+    {
+        $conversation = new Conversation();
+        $conversation->setBeUser(1);
+        $conversation->appendMessage(MessageRole::User, 'Hello');
+
+        $task = $this->createMock(Task::class);
+        $task->method('getConfiguration')->willReturn(null);
+        $taskRepository = $this->createMock(TaskRepository::class);
+        $taskRepository->method('findByUid')->willReturn($task);
+
+        $service = $this->createChatService(taskRepository: $taskRepository);
+        $service->processConversation($conversation);
+
+        self::assertSame(ConversationStatus::Failed, $conversation->getStatus());
+        self::assertStringContainsString('no LLM configuration', $conversation->getErrorMessage());
+    }
+
+    #[Test]
+    public function processConversationSetsFailedOnErrorOutcome(): void
+    {
+        $conversation = new Conversation();
+        $conversation->setBeUser(1);
+        $conversation->appendMessage(MessageRole::User, 'Hello');
+
+        $result = new AgentRunResult(
+            AgentRunOutcome::FAILED,
+            'run-uuid',
+            [],
+            null,
+            null,
+            null,
+            new RuntimeException('provider exploded'),
+        );
+
+        $service = $this->createChatService($result);
+        $service->processConversation($conversation);
+
+        self::assertSame(ConversationStatus::Failed, $conversation->getStatus());
+        self::assertStringContainsString('provider exploded', $conversation->getErrorMessage());
+    }
+
+    #[Test]
+    public function processConversationSetsFailedWithDescriptiveMessageOnGuardrailBlock(): void
+    {
+        $conversation = new Conversation();
+        $conversation->setBeUser(1);
+        $conversation->appendMessage(MessageRole::User, 'Hello');
+
+        $result = new AgentRunResult(AgentRunOutcome::GUARDRAIL_BLOCKED, 'run-uuid', []);
+
+        $service = $this->createChatService($result);
+        $service->processConversation($conversation);
+
+        self::assertSame(ConversationStatus::Failed, $conversation->getStatus());
+        self::assertStringContainsString('guardrail', $conversation->getErrorMessage());
+    }
+
+    #[Test]
+    public function processConversationSetsFailedWhenAwaitingApproval(): void
+    {
+        $conversation = new Conversation();
+        $conversation->setBeUser(1);
+        $conversation->appendMessage(MessageRole::User, 'Hello');
+
+        $result = new AgentRunResult(AgentRunOutcome::AWAITING_APPROVAL, 'run-uuid', []);
+
+        $service = $this->createChatService($result);
+        $service->processConversation($conversation);
+
+        self::assertSame(ConversationStatus::Failed, $conversation->getStatus());
+        self::assertStringContainsString('confirmation', $conversation->getErrorMessage());
+    }
+
+    #[Test]
+    public function processConversationPersistsWhenNoLlmTaskConfigured(): void
+    {
+        $conversation = new Conversation();
+        $conversation->setBeUser(1);
+        $conversation->appendMessage(MessageRole::User, 'Hello');
+
+        $config = $this->createStub(ExtensionConfiguration::class);
+        $config->method('getLlmTaskUid')->willReturn(0);
+
+        $repository = $this->createMock(ConversationRepository::class);
+        $repository->expects(self::once())->method('update');
+
+        $service = $this->createChatService(repository: $repository, config: $config);
+        $service->processConversation($conversation);
+    }
+
+    #[Test]
+    public function processConversationPersistsOnCompletion(): void
+    {
+        $conversation = new Conversation();
+        $conversation->setBeUser(1);
+        $conversation->appendMessage(MessageRole::User, 'Hello');
+
+        $repository = $this->createMock(ConversationRepository::class);
+        $repository->expects(self::once())->method('update');
+
+        $service = $this->createChatService(repository: $repository);
+        $service->processConversation($conversation);
+
+        self::assertSame(ConversationStatus::Idle, $conversation->getStatus());
+    }
+
+    // -------------------------------------------------------------------------
+    // resumeConversation
+    // -------------------------------------------------------------------------
 
     #[Test]
     public function resumeConversationDoesNothingForNonResumableStatus(): void
@@ -163,13 +404,30 @@ class ChatServiceTest extends TestCase
         $conversation->setBeUser(1);
         $conversation->setStatus(ConversationStatus::Idle);
 
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->expects(self::never())->method('chatCompletion');
-
-        $service = $this->createChatService($provider);
+        $service = $this->createChatService();
         $service->resumeConversation($conversation);
 
         self::assertSame(ConversationStatus::Idle, $conversation->getStatus());
+        self::assertNull($this->capturedRequest);
+    }
+
+    #[Test]
+    public function resumeConversationReRunsResumableConversation(): void
+    {
+        $conversation = Conversation::fromRow([
+            'uid' => 3,
+            'be_user' => 1,
+            'status' => 'failed',
+            'messages' => json_encode([['role' => 'user', 'content' => 'Hi again']]),
+            'message_count' => 1,
+        ]);
+
+        $service = $this->createChatService($this->completedResult('Resumed answer.'));
+        $service->resumeConversation($conversation);
+
+        self::assertSame(ConversationStatus::Idle, $conversation->getStatus());
+        $messages = $conversation->getDecodedMessages();
+        self::assertSame('Resumed answer.', end($messages)['content']);
     }
 
     #[Test]
@@ -186,176 +444,30 @@ class ChatServiceTest extends TestCase
         $config = $this->createStub(ExtensionConfiguration::class);
         $config->method('getLlmTaskUid')->willReturn(0);
 
-        $provider = $this->createMock(ProviderInterface::class);
-        $service = $this->createChatService($provider, config: $config);
+        $service = $this->createChatService(config: $config);
         $service->resumeConversation($conversation);
 
         self::assertSame(ConversationStatus::Failed, $conversation->getStatus());
         self::assertStringContainsString('nr-llm Task', $conversation->getErrorMessage());
     }
 
-    #[Test]
-    public function processConversationCallsUpdateStatusAtStart(): void
-    {
-        $conversation = Conversation::fromRow([
-            'uid' => 42,
-            'be_user' => 1,
-            'status' => 'processing',
-            'messages' => json_encode([['role' => 'user', 'content' => 'Hi']]),
-            'message_count' => 1,
-        ]);
-
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')
-            ->willReturn($this->createCompletionResponse('Hello!'));
-
-        $repository = $this->createMock(ConversationRepository::class);
-        $repository->expects(self::once())
-            ->method('updateStatus')
-            ->with(42, ConversationStatus::Processing, 1);
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        $service = $this->createChatService($provider, repository: $repository);
-        $service->processConversation($conversation);
-
-        unset($GLOBALS['BE_USER']);
-    }
+    // -------------------------------------------------------------------------
+    // System prompt composition
+    // -------------------------------------------------------------------------
 
     #[Test]
-    public function buildSystemPromptReturnsGermanForDeLocale(): void
-    {
-        $conversation = new Conversation();
-        $conversation->setBeUser(1);
-        $conversation->appendMessage(MessageRole::User, 'Hallo');
-
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')
-            ->willReturn($this->createCompletionResponse('Hallo!'));
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'de'];
-
-        $service = $this->createChatService($provider);
-        $service->processConversation($conversation);
-
-        self::assertSame(ConversationStatus::Idle, $conversation->getStatus());
-
-        unset($GLOBALS['BE_USER']);
-    }
-
-    #[Test]
-    public function buildSystemPromptUsesCustomPromptWhenSet(): void
-    {
-        $conversation = new Conversation();
-        $conversation->setBeUser(1);
-        $conversation->setSystemPrompt('Custom system prompt');
-        $conversation->appendMessage(MessageRole::User, 'Hello');
-
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')
-            ->willReturn($this->createCompletionResponse('Hi!'));
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        $service = $this->createChatService($provider);
-        $service->processConversation($conversation);
-
-        self::assertSame(ConversationStatus::Idle, $conversation->getStatus());
-
-        unset($GLOBALS['BE_USER']);
-    }
-
-    #[Test]
-    public function buildSystemPromptPassesGermanPromptToLlm(): void
-    {
-        $conversation = new Conversation();
-        $conversation->setBeUser(1);
-        $conversation->appendMessage(MessageRole::User, 'Hallo');
-
-        $capturedMessages = null;
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willReturnCallback(
-            function (array $messages) use (&$capturedMessages) {
-                $capturedMessages = $messages;
-                return $this->createCompletionResponse('Hallo!');
-            },
-        );
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'de'];
-
-        $service = $this->createChatService($provider);
-        $service->processConversation($conversation);
-
-        self::assertNotNull($capturedMessages);
-        self::assertSame('system', $capturedMessages[0]['role']);
-        self::assertStringContainsString('Deutsch', $capturedMessages[0]['content']);
-        self::assertStringContainsString('TYPO3-Assistent', $capturedMessages[0]['content']);
-
-        unset($GLOBALS['BE_USER']);
-    }
-
-    #[Test]
-    public function buildSystemPromptPassesCustomPromptToLlm(): void
-    {
-        $conversation = new Conversation();
-        $conversation->setBeUser(1);
-        $conversation->setSystemPrompt('My custom system prompt');
-        $conversation->appendMessage(MessageRole::User, 'Hello');
-
-        $capturedMessages = null;
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willReturnCallback(
-            function (array $messages) use (&$capturedMessages) {
-                $capturedMessages = $messages;
-                return $this->createCompletionResponse('Hi!');
-            },
-        );
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        $service = $this->createChatService($provider);
-        $service->processConversation($conversation);
-
-        self::assertNotNull($capturedMessages);
-        self::assertSame('system', $capturedMessages[0]['role']);
-        self::assertSame('My custom system prompt', $capturedMessages[0]['content']);
-
-        unset($GLOBALS['BE_USER']);
-    }
-
-    #[Test]
-    public function systemPromptUsesConfigurationPromptWhenSet(): void
+    public function systemPromptAppendsConfigurationPromptAfterIdentity(): void
     {
         $conversation = new Conversation();
         $conversation->setBeUser(1);
         $conversation->appendMessage(MessageRole::User, 'Hello');
 
-        $capturedMessages = null;
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willReturnCallback(
-            function (array $messages) use (&$capturedMessages) {
-                $capturedMessages = $messages;
-                return $this->createCompletionResponse('Hi!');
-            },
-        );
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        $service = $this->createChatService($provider, prompts: [
-            'system_prompt' => 'You are a content editor.',
-        ]);
+        $service = $this->createChatService(prompts: ['system_prompt' => 'You are a content editor.']);
         $service->processConversation($conversation);
 
-        self::assertNotNull($capturedMessages);
-        self::assertSame('You are a content editor.', $capturedMessages[0]['content']);
-
-        unset($GLOBALS['BE_USER']);
+        $system = $this->capturedSystemPrompt();
+        self::assertStringContainsString('TYPO3 Backend AI Chat by Netresearch', $system);
+        self::assertStringContainsString('You are a content editor.', $system);
     }
 
     #[Test]
@@ -365,68 +477,64 @@ class ChatServiceTest extends TestCase
         $conversation->setBeUser(1);
         $conversation->appendMessage(MessageRole::User, 'Hello');
 
-        $capturedMessages = null;
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willReturnCallback(
-            function (array $messages) use (&$capturedMessages) {
-                $capturedMessages = $messages;
-                return $this->createCompletionResponse('Hi!');
-            },
-        );
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        $service = $this->createChatService($provider, prompts: [
+        $service = $this->createChatService(prompts: [
             'system_prompt' => 'You are a TYPO3 assistant.',
             'prompt_template' => 'Always wrap record fields in the data parameter.',
         ]);
         $service->processConversation($conversation);
 
-        self::assertNotNull($capturedMessages);
-        $content = $capturedMessages[0]['content'];
-        self::assertStringContainsString('You are a TYPO3 assistant.', $content);
-        self::assertStringContainsString('Always wrap record fields', $content);
-
-        unset($GLOBALS['BE_USER']);
+        $system = $this->capturedSystemPrompt();
+        self::assertStringContainsString('You are a TYPO3 assistant.', $system);
+        self::assertStringContainsString('Always wrap record fields', $system);
     }
 
     #[Test]
-    public function siteLanguageContextIsAppendedToFallbackSystemPrompt(): void
+    public function systemPromptUsesConversationCustomPromptInsteadOfConfigPrompts(): void
+    {
+        $conversation = new Conversation();
+        $conversation->setBeUser(1);
+        $conversation->setSystemPrompt('Only custom instructions');
+        $conversation->appendMessage(MessageRole::User, 'Hello');
+
+        $service = $this->createChatService(prompts: [
+            'system_prompt' => 'This should be ignored.',
+            'prompt_template' => 'This too.',
+        ]);
+        $service->processConversation($conversation);
+
+        $system = $this->capturedSystemPrompt();
+        // Identity is always present; the conversation prompt replaces config/task prompts.
+        self::assertStringContainsString('TYPO3 Backend AI Chat by Netresearch', $system);
+        self::assertStringContainsString('Only custom instructions', $system);
+        self::assertStringNotContainsString('This should be ignored.', $system);
+        self::assertStringNotContainsString('This too.', $system);
+    }
+
+    // -------------------------------------------------------------------------
+    // Site language context
+    // -------------------------------------------------------------------------
+
+    #[Test]
+    public function siteLanguageContextIsAppendedToSystemPrompt(): void
     {
         $conversation = new Conversation();
         $conversation->setBeUser(1);
         $conversation->appendMessage(MessageRole::User, 'Hello');
-
-        $capturedMessages = null;
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willReturnCallback(
-            function (array $messages) use (&$capturedMessages) {
-                $capturedMessages = $messages;
-                return $this->createCompletionResponse('Hi!');
-            },
-        );
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
 
         $siteFinder = $this->createSiteFinderWithLanguages([
             ['uid' => 0, 'title' => 'English', 'isoCode' => 'en'],
             ['uid' => 1, 'title' => 'German', 'isoCode' => 'de'],
         ]);
 
-        $service = $this->createChatService($provider, siteFinder: $siteFinder);
+        $service = $this->createChatService(siteFinder: $siteFinder);
         $service->processConversation($conversation);
 
-        self::assertNotNull($capturedMessages);
-        $content = $capturedMessages[0]['content'];
-        self::assertStringContainsString('Available site languages', $content);
-        self::assertStringContainsString('sys_language_uid=0', $content);
-        self::assertStringContainsString('sys_language_uid=1', $content);
-        self::assertStringContainsString('English', $content);
-        self::assertStringContainsString('German', $content);
-
-        unset($GLOBALS['BE_USER']);
+        $system = $this->capturedSystemPrompt();
+        self::assertStringContainsString('Available site languages', $system);
+        self::assertStringContainsString('sys_language_uid=0', $system);
+        self::assertStringContainsString('sys_language_uid=1', $system);
+        self::assertStringContainsString('English', $system);
+        self::assertStringContainsString('German', $system);
     }
 
     #[Test]
@@ -436,36 +544,19 @@ class ChatServiceTest extends TestCase
         $conversation->setBeUser(1);
         $conversation->appendMessage(MessageRole::User, 'Hello');
 
-        $capturedMessages = null;
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willReturnCallback(
-            function (array $messages) use (&$capturedMessages) {
-                $capturedMessages = $messages;
-                return $this->createCompletionResponse('Hi!');
-            },
-        );
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
         $siteFinder = $this->createSiteFinderWithLanguages([
             ['uid' => 0, 'title' => 'Deutsch', 'isoCode' => 'de'],
             ['uid' => 1, 'title' => 'English', 'isoCode' => 'en'],
         ]);
 
-        $service = $this->createChatService($provider, siteFinder: $siteFinder);
+        $service = $this->createChatService(siteFinder: $siteFinder);
         $service->processConversation($conversation);
 
-        self::assertNotNull($capturedMessages);
-        $content = $capturedMessages[0]['content'];
-        // Split into lines to avoid cross-line regex matching (kills ternary/identical mutations)
-        $lines = explode("\n", $content);
+        $lines = explode("\n", $this->capturedSystemPrompt());
         $uid0Line = array_values(array_filter($lines, static fn(string $l) => str_contains($l, 'sys_language_uid=0')))[0] ?? '';
         $uid1Line = array_values(array_filter($lines, static fn(string $l) => str_contains($l, 'sys_language_uid=1')))[0] ?? '';
         self::assertStringContainsString('(default)', $uid0Line);
         self::assertStringNotContainsString('(default)', $uid1Line);
-
-        unset($GLOBALS['BE_USER']);
     }
 
     #[Test]
@@ -476,31 +567,16 @@ class ChatServiceTest extends TestCase
         $conversation->setSystemPrompt('Only custom instructions');
         $conversation->appendMessage(MessageRole::User, 'Hello');
 
-        $capturedMessages = null;
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willReturnCallback(
-            function (array $messages) use (&$capturedMessages) {
-                $capturedMessages = $messages;
-                return $this->createCompletionResponse('Hi!');
-            },
-        );
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
         $siteFinder = $this->createSiteFinderWithLanguages([
             ['uid' => 0, 'title' => 'English', 'isoCode' => 'en'],
         ]);
 
-        $service = $this->createChatService($provider, siteFinder: $siteFinder);
+        $service = $this->createChatService(siteFinder: $siteFinder);
         $service->processConversation($conversation);
 
-        self::assertNotNull($capturedMessages);
-        $content = $capturedMessages[0]['content'];
-        self::assertStringContainsString('Only custom instructions', $content);
-        self::assertStringContainsString('Available site languages', $content);
-
-        unset($GLOBALS['BE_USER']);
+        $system = $this->capturedSystemPrompt();
+        self::assertStringContainsString('Only custom instructions', $system);
+        self::assertStringContainsString('Available site languages', $system);
     }
 
     #[Test]
@@ -510,27 +586,11 @@ class ChatServiceTest extends TestCase
         $conversation->setBeUser(1);
         $conversation->appendMessage(MessageRole::User, 'Hello');
 
-        $capturedMessages = null;
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willReturnCallback(
-            function (array $messages) use (&$capturedMessages) {
-                $capturedMessages = $messages;
-                return $this->createCompletionResponse('Hi!');
-            },
-        );
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        // Default mock returns [] for getAllSites() → no language context
-        $service = $this->createChatService($provider);
+        // Default SiteFinder mock returns [] for getAllSites() → no language context
+        $service = $this->createChatService();
         $service->processConversation($conversation);
 
-        self::assertNotNull($capturedMessages);
-        $content = $capturedMessages[0]['content'];
-        self::assertStringNotContainsString('Available site languages', $content);
-
-        unset($GLOBALS['BE_USER']);
+        self::assertStringNotContainsString('Available site languages', $this->capturedSystemPrompt());
     }
 
     #[Test]
@@ -540,30 +600,16 @@ class ChatServiceTest extends TestCase
         $conversation->setBeUser(1);
         $conversation->appendMessage(MessageRole::User, 'Hello');
 
-        $capturedMessages = null;
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willReturnCallback(
-            function (array $messages) use (&$capturedMessages) {
-                $capturedMessages = $messages;
-                return $this->createCompletionResponse('Hi!');
-            },
-        );
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        // Provide languages in reverse uid order — ksort must reorder them
         $siteFinder = $this->createSiteFinderWithLanguages([
             ['uid' => 2, 'title' => 'French', 'isoCode' => 'fr'],
             ['uid' => 1, 'title' => 'German', 'isoCode' => 'de'],
             ['uid' => 0, 'title' => 'English', 'isoCode' => 'en'],
         ]);
 
-        $service = $this->createChatService($provider, siteFinder: $siteFinder);
+        $service = $this->createChatService(siteFinder: $siteFinder);
         $service->processConversation($conversation);
 
-        self::assertNotNull($capturedMessages);
-        $content = $capturedMessages[0]['content'];
+        $content = $this->capturedSystemPrompt();
         $pos0 = strpos($content, 'sys_language_uid=0');
         $pos1 = strpos($content, 'sys_language_uid=1');
         $pos2 = strpos($content, 'sys_language_uid=2');
@@ -572,8 +618,6 @@ class ChatServiceTest extends TestCase
         self::assertNotFalse($pos2);
         self::assertLessThan($pos1, $pos0, 'uid=0 must appear before uid=1');
         self::assertLessThan($pos2, $pos1, 'uid=1 must appear before uid=2');
-
-        unset($GLOBALS['BE_USER']);
     }
 
     #[Test]
@@ -583,19 +627,6 @@ class ChatServiceTest extends TestCase
         $conversation->setBeUser(1);
         $conversation->appendMessage(MessageRole::User, 'Hello');
 
-        $capturedMessages = null;
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willReturnCallback(
-            function (array $messages) use (&$capturedMessages) {
-                $capturedMessages = $messages;
-                return $this->createCompletionResponse('Hi!');
-            },
-        );
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        // Locale returns uppercase 'FR'; hreflang returns 'de-CH' (different fallback)
         $locale = $this->createMock(Locale::class);
         $locale->method('getLanguageCode')->willReturn('FR');
 
@@ -607,20 +638,15 @@ class ChatServiceTest extends TestCase
 
         $site = $this->createMock(Site::class);
         $site->method('getAllLanguages')->willReturn([$siteLanguage]);
-
         $siteFinder = $this->createMock(SiteFinder::class);
         $siteFinder->method('getAllSites')->willReturn([$site]);
 
-        $service = $this->createChatService($provider, siteFinder: $siteFinder);
+        $service = $this->createChatService(siteFinder: $siteFinder);
         $service->processConversation($conversation);
 
-        self::assertNotNull($capturedMessages);
-        $content = $capturedMessages[0]['content'];
-        // Must use strtolower(locale code) = 'fr', not hreflang fallback = 'de'
+        $content = $this->capturedSystemPrompt();
         self::assertStringContainsString('ISO "fr"', $content);
         self::assertStringNotContainsString('ISO "de"', $content);
-
-        unset($GLOBALS['BE_USER']);
     }
 
     #[Test]
@@ -630,305 +656,24 @@ class ChatServiceTest extends TestCase
         $conversation->setBeUser(1);
         $conversation->appendMessage(MessageRole::User, 'Hello');
 
-        $capturedMessages = null;
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willReturnCallback(
-            function (array $messages) use (&$capturedMessages) {
-                $capturedMessages = $messages;
-                return $this->createCompletionResponse('Hi!');
-            },
-        );
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
         $siteFinder = $this->createSiteFinderWithLanguages([
             ['uid' => 0, 'title' => 'English', 'isoCode' => 'en'],
         ]);
 
-        $service = $this->createChatService($provider, siteFinder: $siteFinder);
+        $service = $this->createChatService(siteFinder: $siteFinder);
         $service->processConversation($conversation);
 
-        self::assertNotNull($capturedMessages);
-        $content = $capturedMessages[0]['content'];
+        $content = $this->capturedSystemPrompt();
         $headerPos = strpos($content, 'Available site languages');
         $langLinePos = strpos($content, 'sys_language_uid=0');
         self::assertNotFalse($headerPos);
         self::assertNotFalse($langLinePos);
         self::assertLessThan($langLinePos, $headerPos, 'Header must appear before language lines');
-
-        unset($GLOBALS['BE_USER']);
     }
 
-    #[Test]
-    public function conversationPromptOverridesConfigPrompts(): void
-    {
-        $conversation = new Conversation();
-        $conversation->setBeUser(1);
-        $conversation->setSystemPrompt('Only custom instructions');
-        $conversation->appendMessage(MessageRole::User, 'Hello');
-
-        $capturedMessages = null;
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willReturnCallback(
-            function (array $messages) use (&$capturedMessages) {
-                $capturedMessages = $messages;
-                return $this->createCompletionResponse('Hi!');
-            },
-        );
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        $service = $this->createChatService($provider, prompts: [
-            'system_prompt' => 'This should be ignored.',
-        ]);
-        $service->processConversation($conversation);
-
-        self::assertNotNull($capturedMessages);
-        self::assertSame('Only custom instructions', $capturedMessages[0]['content']);
-
-        unset($GLOBALS['BE_USER']);
-    }
-
-    #[Test]
-    public function processConversationDisconnectsMcpOnSuccess(): void
-    {
-        $conversation = new Conversation();
-        $conversation->setBeUser(1);
-        $conversation->appendMessage(MessageRole::User, 'Hello');
-
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')
-            ->willReturn($this->createCompletionResponse('Hi!'));
-
-        $config = $this->createMcpEnabledConfig();
-        $mcpProvider = $this->createMock(McpToolProviderInterface::class);
-        $mcpProvider->method('getToolDefinitions')->willReturn([]);
-        $mcpProvider->expects(self::once())->method('disconnect');
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        $service = $this->createChatService($provider, config: $config, mcpProvider: $mcpProvider);
-        $service->processConversation($conversation);
-
-        unset($GLOBALS['BE_USER']);
-    }
-
-    #[Test]
-    public function processConversationDisconnectsMcpOnError(): void
-    {
-        $conversation = new Conversation();
-        $conversation->setBeUser(1);
-        $conversation->appendMessage(MessageRole::User, 'Hello');
-
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')
-            ->willThrowException(new RuntimeException('LLM exploded'));
-
-        $config = $this->createMcpEnabledConfig();
-        $mcpProvider = $this->createMock(McpToolProviderInterface::class);
-        $mcpProvider->method('getToolDefinitions')->willReturn([]);
-        $mcpProvider->expects(self::once())->method('disconnect');
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        $service = $this->createChatService($provider, config: $config, mcpProvider: $mcpProvider);
-        $service->processConversation($conversation);
-
-        self::assertSame(ConversationStatus::Failed, $conversation->getStatus());
-        self::assertStringContainsString('LLM exploded', $conversation->getErrorMessage());
-
-        unset($GLOBALS['BE_USER']);
-    }
-
-    #[Test]
-    public function processConversationSetsStatusToProcessingAtStart(): void
-    {
-        $conversation = Conversation::fromRow([
-            'uid' => 10,
-            'be_user' => 1,
-            'status' => 'processing',
-            'messages' => json_encode([['role' => 'user', 'content' => 'Hi']]),
-            'message_count' => 1,
-        ]);
-
-        $statusUpdates = [];
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')
-            ->willReturn($this->createCompletionResponse('Hello!'));
-
-        $repository = $this->createMock(ConversationRepository::class);
-        $repository->method('updateStatus')->willReturnCallback(
-            function (int $uid, ConversationStatus $status) use (&$statusUpdates): void {
-                $statusUpdates[] = ['uid' => $uid, 'status' => $status];
-            },
-        );
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        $service = $this->createChatService($provider, repository: $repository);
-        $service->processConversation($conversation);
-
-        self::assertNotEmpty($statusUpdates);
-        self::assertSame(10, $statusUpdates[0]['uid']);
-        self::assertSame(ConversationStatus::Processing, $statusUpdates[0]['status']);
-
-        unset($GLOBALS['BE_USER']);
-    }
-
-    #[Test]
-    public function buildSystemPromptDefaultsToEnglishWhenNoBeUser(): void
-    {
-        $conversation = new Conversation();
-        $conversation->setBeUser(1);
-        $conversation->appendMessage(MessageRole::User, 'Hello');
-
-        $capturedMessages = null;
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willReturnCallback(
-            function (array $messages) use (&$capturedMessages) {
-                $capturedMessages = $messages;
-                return $this->createCompletionResponse('Hi!');
-            },
-        );
-
-        // No BE_USER set
-        unset($GLOBALS['BE_USER']);
-
-        $service = $this->createChatService($provider);
-        $service->processConversation($conversation);
-
-        self::assertNotNull($capturedMessages);
-        self::assertSame('system', $capturedMessages[0]['role']);
-        self::assertStringContainsString('English', $capturedMessages[0]['content']);
-        self::assertStringContainsString('TYPO3 assistant', $capturedMessages[0]['content']);
-    }
-
-    #[Test]
-    public function processConversationFailsWhenProviderModelNotFound(): void
-    {
-        $conversation = new Conversation();
-        $conversation->setBeUser(1);
-        $conversation->appendMessage(MessageRole::User, 'Hello');
-
-        $config = $this->createStub(ExtensionConfiguration::class);
-        $config->method('getLlmTaskUid')->willReturn(999);
-        $config->method('isMcpEnabled')->willReturn(false);
-
-        $llmTaskRepository = $this->createMock(LlmTaskRepository::class);
-        $llmTaskRepository->method('resolveModelByTaskUid')
-            ->willThrowException(new RuntimeException('Could not resolve LLM model for task uid 999'));
-
-        $adapterRegistry = $this->createMock(ProviderAdapterRegistryInterface::class);
-        $repository = $this->createMock(ConversationRepository::class);
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        $service = new ChatService($repository, $config, $this->createMock(McpToolProviderInterface::class), $llmTaskRepository, $adapterRegistry, $this->createMock(ResourceFactory::class), $this->createMock(SiteFinder::class), new DocumentExtractorRegistry([]));
-        $service->processConversation($conversation);
-
-        self::assertSame(ConversationStatus::Failed, $conversation->getStatus());
-        self::assertStringContainsString('Could not resolve LLM model', $conversation->getErrorMessage());
-
-        unset($GLOBALS['BE_USER']);
-    }
-
-    #[Test]
-    public function processConversationFailsWhenDataMapperReturnsEmpty(): void
-    {
-        $conversation = new Conversation();
-        $conversation->setBeUser(1);
-        $conversation->appendMessage(MessageRole::User, 'Hello');
-
-        $config = $this->createStub(ExtensionConfiguration::class);
-        $config->method('getLlmTaskUid')->willReturn(1);
-        $config->method('isMcpEnabled')->willReturn(false);
-
-        $llmTaskRepository = $this->createMock(LlmTaskRepository::class);
-        $llmTaskRepository->method('resolveModelByTaskUid')
-            ->willThrowException(new RuntimeException('Could not map LLM model for task uid 1'));
-
-        $repository = $this->createMock(ConversationRepository::class);
-        $adapterRegistry = $this->createMock(ProviderAdapterRegistryInterface::class);
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        $service = new ChatService($repository, $config, $this->createMock(McpToolProviderInterface::class), $llmTaskRepository, $adapterRegistry, $this->createMock(ResourceFactory::class), $this->createMock(SiteFinder::class), new DocumentExtractorRegistry([]));
-        $service->processConversation($conversation);
-
-        self::assertSame(ConversationStatus::Failed, $conversation->getStatus());
-        self::assertStringContainsString('Could not map LLM model', $conversation->getErrorMessage());
-
-        unset($GLOBALS['BE_USER']);
-    }
-
-    #[Test]
-    public function systemPromptUsesTaskPromptOnlyWhenConfigEmpty(): void
-    {
-        $conversation = new Conversation();
-        $conversation->setBeUser(1);
-        $conversation->appendMessage(MessageRole::User, 'Hello');
-
-        $capturedMessages = null;
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willReturnCallback(
-            function (array $messages) use (&$capturedMessages) {
-                $capturedMessages = $messages;
-                return $this->createCompletionResponse('Hi!');
-            },
-        );
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        $service = $this->createChatService($provider, prompts: [
-            'system_prompt' => '',
-            'prompt_template' => 'Use the data parameter for record fields.',
-        ]);
-        $service->processConversation($conversation);
-
-        self::assertNotNull($capturedMessages);
-        self::assertSame('Use the data parameter for record fields.', $capturedMessages[0]['content']);
-
-        unset($GLOBALS['BE_USER']);
-    }
-
-    #[Test]
-    public function systemPromptFallsBackToLocaleWhenBothPromptsEmpty(): void
-    {
-        $conversation = new Conversation();
-        $conversation->setBeUser(1);
-        $conversation->appendMessage(MessageRole::User, 'Hello');
-
-        $capturedMessages = null;
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willReturnCallback(
-            function (array $messages) use (&$capturedMessages) {
-                $capturedMessages = $messages;
-                return $this->createCompletionResponse('Hi!');
-            },
-        );
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'de'];
-
-        $service = $this->createChatService($provider, prompts: [
-            'system_prompt' => '',
-            'prompt_template' => '',
-        ]);
-        $service->processConversation($conversation);
-
-        self::assertNotNull($capturedMessages);
-        self::assertStringContainsString('TYPO3-Assistent', $capturedMessages[0]['content']);
-
-        unset($GLOBALS['BE_USER']);
-    }
+    // -------------------------------------------------------------------------
+    // File / multimodal message expansion
+    // -------------------------------------------------------------------------
 
     #[Test]
     public function buildLlmMessagesPassesThroughRegularMessages(): void
@@ -937,31 +682,15 @@ class ChatServiceTest extends TestCase
         $conversation->setBeUser(1);
         $conversation->appendMessage(MessageRole::User, 'Hello without file');
 
-        $capturedMessages = null;
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willReturnCallback(
-            function (array $messages) use (&$capturedMessages) {
-                $capturedMessages = $messages;
-                return $this->createCompletionResponse('Hi!');
-            },
-        );
-
         $resourceFactory = $this->createMock(ResourceFactory::class);
         $resourceFactory->expects(self::never())->method('getFileObject');
 
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        $service = $this->createChatService($provider, resourceFactory: $resourceFactory);
+        $service = $this->createChatService(resourceFactory: $resourceFactory);
         $service->processConversation($conversation);
 
-        self::assertNotNull($capturedMessages);
-        // System prompt + user message
-        $userMsg = end($capturedMessages);
+        $userMsg = $this->capturedUserMessage();
         self::assertSame('user', $userMsg['role']);
         self::assertSame('Hello without file', $userMsg['content']);
-
-        unset($GLOBALS['BE_USER']);
     }
 
     #[Test]
@@ -991,23 +720,10 @@ class ChatServiceTest extends TestCase
             'message_count' => 1,
         ]);
 
-        $capturedMessages = null;
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willReturnCallback(
-            function (array $messages) use (&$capturedMessages) {
-                $capturedMessages = $messages;
-                return $this->createCompletionResponse('It is a dog.');
-            },
-        );
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        $service = $this->createChatService($provider, resourceFactory: $resourceFactory);
+        $service = $this->createChatService(resourceFactory: $resourceFactory);
         $service->processConversation($conversation);
 
-        self::assertNotNull($capturedMessages);
-        $userMsg = end($capturedMessages);
+        $userMsg = $this->capturedUserMessage();
         self::assertSame('user', $userMsg['role']);
         self::assertIsArray($userMsg['content']);
         self::assertSame('text', $userMsg['content'][0]['type']);
@@ -1016,7 +732,6 @@ class ChatServiceTest extends TestCase
         self::assertStringStartsWith('data:image/jpeg;base64,', $userMsg['content'][1]['image_url']['url']);
 
         unlink($tempFile);
-        unset($GLOBALS['BE_USER']);
     }
 
     #[Test]
@@ -1032,6 +747,9 @@ class ChatServiceTest extends TestCase
         $resourceFactory = $this->createMock(ResourceFactory::class);
         $resourceFactory->method('getFileObject')->with(99)->willReturn($mockFile);
 
+        $provider = $this->createMockForIntersectionOfInterfaces([ProviderInterface::class, DocumentCapableInterface::class]);
+        $provider->method('supportsDocuments')->willReturn(true);
+
         $conversation = Conversation::fromRow([
             'uid' => 1,
             'be_user' => 1,
@@ -1046,34 +764,16 @@ class ChatServiceTest extends TestCase
             'message_count' => 1,
         ]);
 
-        $capturedMessages = null;
-        $provider = $this->createMockForIntersectionOfInterfaces([ProviderInterface::class, DocumentCapableInterface::class]);
-        $provider->method('supportsDocuments')->willReturn(true);
-        $provider->method('chatCompletion')->willReturnCallback(
-            function (array $messages) use (&$capturedMessages) {
-                $capturedMessages = $messages;
-                return $this->createCompletionResponse('Summary here.');
-            },
-        );
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        $service = $this->createChatService($provider, resourceFactory: $resourceFactory);
+        $service = $this->createChatService(provider: $provider, resourceFactory: $resourceFactory);
         $service->processConversation($conversation);
 
-        self::assertNotNull($capturedMessages);
-        $userMsg = end($capturedMessages);
-        self::assertSame('user', $userMsg['role']);
+        $userMsg = $this->capturedUserMessage();
         self::assertIsArray($userMsg['content']);
-        self::assertSame('text', $userMsg['content'][0]['type']);
-        self::assertSame('Summarize this PDF', $userMsg['content'][0]['text']);
         self::assertSame('document', $userMsg['content'][1]['type']);
         self::assertSame('base64', $userMsg['content'][1]['source']['type']);
         self::assertSame('application/pdf', $userMsg['content'][1]['source']['media_type']);
 
         unlink($tempFile);
-        unset($GLOBALS['BE_USER']);
     }
 
     #[Test]
@@ -1096,420 +796,30 @@ class ChatServiceTest extends TestCase
             'message_count' => 1,
         ]);
 
-        $capturedMessages = null;
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willReturnCallback(
-            function (array $messages) use (&$capturedMessages) {
-                $capturedMessages = $messages;
-                return $this->createCompletionResponse('OK');
-            },
-        );
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        $service = $this->createChatService($provider, resourceFactory: $resourceFactory);
+        $service = $this->createChatService(resourceFactory: $resourceFactory);
         $service->processConversation($conversation);
 
-        self::assertNotNull($capturedMessages);
-        $userMsg = end($capturedMessages);
+        $userMsg = $this->capturedUserMessage();
         self::assertSame('user', $userMsg['role']);
         self::assertIsString($userMsg['content']);
         self::assertStringContainsString('Look at this', $userMsg['content']);
         self::assertStringContainsString('deleted.png', $userMsg['content']);
-
-        unset($GLOBALS['BE_USER']);
-    }
-
-    #[Test]
-    public function resolveProviderHandlesNullPromptFieldsFromDatabase(): void
-    {
-        $conversation = new Conversation();
-        $conversation->setBeUser(1);
-        $conversation->appendMessage(MessageRole::User, 'Hello');
-
-        $capturedMessages = null;
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willReturnCallback(
-            function (array $messages) use (&$capturedMessages) {
-                $capturedMessages = $messages;
-                return $this->createCompletionResponse('Hi!');
-            },
-        );
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        // Simulate null values from DB (no system_prompt configured)
-        $service = $this->createChatService($provider, prompts: [
-            'system_prompt' => null,
-            'prompt_template' => null,
-        ]);
-        $service->processConversation($conversation);
-
-        self::assertNotNull($capturedMessages);
-        // Should fall back to locale default
-        self::assertStringContainsString('TYPO3 assistant', $capturedMessages[0]['content']);
-
-        unset($GLOBALS['BE_USER']);
-    }
-
-    // -------------------------------------------------------------------------
-    // getProviderCapabilities
-    // -------------------------------------------------------------------------
-
-    #[Test]
-    public function getProviderCapabilitiesReturnsPdfForVisionAndDocumentCapableProvider(): void
-    {
-        $provider = $this->createMockForIntersectionOfInterfaces([ProviderInterface::class, VisionCapableInterface::class, DocumentCapableInterface::class]);
-        $provider->method('supportsVision')->willReturn(true);
-        $provider->method('getSupportedImageFormats')->willReturn(['png', 'jpeg', 'webp']);
-        $provider->method('getMaxImageSize')->willReturn(20 * 1024 * 1024);
-        $provider->method('supportsDocuments')->willReturn(true);
-        $provider->method('getSupportedDocumentFormats')->willReturn(['pdf']);
-
-        $service = $this->createChatService($provider);
-        $caps = $service->getProviderCapabilities();
-
-        self::assertTrue($caps['visionSupported']);
-        self::assertSame(20 * 1024 * 1024, $caps['maxFileSize']);
-        self::assertContains('png', $caps['supportedFormats']);
-        self::assertContains('pdf', $caps['supportedFormats']);
-    }
-
-    #[Test]
-    public function getProviderCapabilitiesExcludesPdfForVisionOnlyProvider(): void
-    {
-        $provider = $this->createMockForIntersectionOfInterfaces([ProviderInterface::class, VisionCapableInterface::class]);
-        $provider->method('supportsVision')->willReturn(true);
-        $provider->method('getSupportedImageFormats')->willReturn(['png', 'jpeg']);
-        $provider->method('getMaxImageSize')->willReturn(10 * 1024 * 1024);
-
-        $service = $this->createChatService($provider);
-        $caps = $service->getProviderCapabilities();
-
-        self::assertTrue($caps['visionSupported']);
-        self::assertContains('png', $caps['supportedFormats']);
-        self::assertNotContains('pdf', $caps['supportedFormats']);
-    }
-
-    #[Test]
-    public function getProviderCapabilitiesReturnsEmptyForNonVisionProvider(): void
-    {
-        $provider = $this->createMock(ProviderInterface::class);
-
-        $service = $this->createChatService($provider);
-        $caps = $service->getProviderCapabilities();
-
-        self::assertFalse($caps['visionSupported']);
-        self::assertSame(0, $caps['maxFileSize']);
-        self::assertSame([], $caps['supportedFormats']);
-    }
-
-    #[Test]
-    public function buildLlmMessagesFallsBackToUnavailableWhenProviderDoesNotSupportDocuments(): void
-    {
-        $tempFile = tempnam(sys_get_temp_dir(), 'chat_test_');
-        file_put_contents($tempFile, '%PDF-fake-data');
-
-        $mockFile = $this->createMock(File::class);
-        $mockFile->method('getForLocalProcessing')->willReturn($tempFile);
-        $mockFile->method('getMimeType')->willReturn('application/pdf');
-
-        $resourceFactory = $this->createMock(ResourceFactory::class);
-        $resourceFactory->method('getFileObject')->with(55)->willReturn($mockFile);
-
-        $conversation = Conversation::fromRow([
-            'uid' => 1,
-            'be_user' => 1,
-            'status' => 'idle',
-            'messages' => json_encode([[
-                'role' => 'user',
-                'content' => 'Check this PDF',
-                'fileUid' => 55,
-                'fileName' => 'report.pdf',
-                'fileMimeType' => 'application/pdf',
-            ]]),
-            'message_count' => 1,
-        ]);
-
-        // Provider does NOT implement DocumentCapableInterface
-        $capturedMessages = null;
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willReturnCallback(
-            function (array $messages) use (&$capturedMessages) {
-                $capturedMessages = $messages;
-                return $this->createCompletionResponse('OK');
-            },
-        );
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        $service = $this->createChatService($provider, resourceFactory: $resourceFactory);
-        $service->processConversation($conversation);
-
-        self::assertNotNull($capturedMessages);
-        $userMsg = end($capturedMessages);
-        self::assertSame('user', $userMsg['role']);
-        // Should fall back to "file unavailable" text, not a document block
-        self::assertIsString($userMsg['content']);
-        self::assertStringContainsString('report.pdf', $userMsg['content']);
-        self::assertStringContainsString('no longer available', $userMsg['content']);
-
-        unlink($tempFile);
-        unset($GLOBALS['BE_USER']);
-    }
-
-    // -------------------------------------------------------------------------
-    // MethodCallRemoval mutations: persist() must be called (line 80, 102)
-    // -------------------------------------------------------------------------
-
-    #[Test]
-    public function processConversationPersistsWhenNoLlmTaskConfigured(): void
-    {
-        $conversation = new Conversation();
-        $conversation->setBeUser(1);
-        $conversation->appendMessage(MessageRole::User, 'Hello');
-
-        $config = $this->createStub(ExtensionConfiguration::class);
-        $config->method('getLlmTaskUid')->willReturn(0);
-
-        $repository = $this->createMock(ConversationRepository::class);
-        $repository->expects(self::once())->method('update');
-
-        $provider = $this->createMock(ProviderInterface::class);
-        $service = $this->createChatService($provider, repository: $repository, config: $config);
-        $service->processConversation($conversation);
-    }
-
-    #[Test]
-    public function processConversationPersistsOnProviderException(): void
-    {
-        $conversation = new Conversation();
-        $conversation->setBeUser(1);
-        $conversation->appendMessage(MessageRole::User, 'Hello');
-
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willThrowException(new RuntimeException('Provider error'));
-
-        $repository = $this->createMock(ConversationRepository::class);
-        // updateStatus for Processing + update on failure = at least 2 calls
-        $repository->expects(self::atLeast(1))->method('update');
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        $service = $this->createChatService($provider, repository: $repository);
-        $service->processConversation($conversation);
-
-        self::assertSame(ConversationStatus::Failed, $conversation->getStatus());
-
-        unset($GLOBALS['BE_USER']);
-    }
-
-    // -------------------------------------------------------------------------
-    // Multi-server: disconnect always called, connect never called (lazy)
-    // -------------------------------------------------------------------------
-
-    #[Test]
-    public function processConversationAlwaysCallsDisconnect(): void
-    {
-        $conversation = new Conversation();
-        $conversation->setBeUser(1);
-        $conversation->appendMessage(MessageRole::User, 'Hello');
-
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willReturn($this->createCompletionResponse('ok'));
-
-        $mcpProvider = $this->createMock(\Netresearch\NrMcpAgent\Mcp\McpToolProviderInterface::class);
-        $mcpProvider->method('getToolDefinitions')->willReturn([]);
-        $mcpProvider->expects(self::once())->method('disconnect');
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        $service = $this->createChatService($provider, mcpProvider: $mcpProvider);
-        $service->processConversation($conversation);
-
-        self::assertSame(ConversationStatus::Idle, $conversation->getStatus());
-
-        unset($GLOBALS['BE_USER']);
-    }
-
-    // -------------------------------------------------------------------------
-    // resumeConversation: MethodCallRemoval (lines 119, 121) + LogicalAnd (125)
-    // -------------------------------------------------------------------------
-
-    #[Test]
-    public function resumeConversationPersistsWhenNoLlmTaskConfigured(): void
-    {
-        $conversation = new Conversation();
-        $conversation->setBeUser(1);
-        $conversation->setStatus(ConversationStatus::Processing);
-        $conversation->appendMessage(MessageRole::User, 'Hello');
-
-        $config = $this->createStub(ExtensionConfiguration::class);
-        $config->method('getLlmTaskUid')->willReturn(0);
-
-        $repository = $this->createMock(ConversationRepository::class);
-        $repository->expects(self::once())->method('update');
-
-        $provider = $this->createMock(ProviderInterface::class);
-        $service = $this->createChatService($provider, repository: $repository, config: $config);
-        $service->resumeConversation($conversation);
-
-        self::assertSame(ConversationStatus::Failed, $conversation->getStatus());
-    }
-
-    #[Test]
-    public function resumeConversationAlwaysCallsDisconnect(): void
-    {
-        $conversation = new Conversation();
-        $conversation->setBeUser(1);
-        $conversation->setStatus(ConversationStatus::Processing);
-        $conversation->appendMessage(MessageRole::User, 'Hello');
-
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willReturn($this->createCompletionResponse('ok'));
-
-        $mcpProvider = $this->createMock(\Netresearch\NrMcpAgent\Mcp\McpToolProviderInterface::class);
-        $mcpProvider->method('getToolDefinitions')->willReturn([]);
-        $mcpProvider->expects(self::once())->method('disconnect');
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        $service = $this->createChatService($provider, mcpProvider: $mcpProvider);
-        $service->resumeConversation($conversation);
-
-        unset($GLOBALS['BE_USER']);
-    }
-
-    // -------------------------------------------------------------------------
-    // buildMcpNamespaceHint: appended to system prompt when MCP is enabled
-    // -------------------------------------------------------------------------
-
-    #[Test]
-    public function mcpNamespaceHintIsAppendedToSystemPromptWhenServersActive(): void
-    {
-        $conversation = new Conversation();
-        $conversation->setBeUser(1);
-        $conversation->appendMessage(MessageRole::User, 'Hello');
-
-        $capturedMessages = null;
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willReturnCallback(
-            function (array $messages) use (&$capturedMessages) {
-                $capturedMessages = $messages;
-                return $this->createCompletionResponse('Hi!');
-            },
-        );
-
-        $config = $this->createStub(ExtensionConfiguration::class);
-        $config->method('getLlmTaskUid')->willReturn(1);
-        $config->method('isMcpEnabled')->willReturn(true);
-
-        $mcpProvider = $this->createMock(McpToolProviderInterface::class);
-        $mcpProvider->method('getToolDefinitions')->willReturn([]);
-        $mcpProvider->method('getActiveServers')->willReturn([
-            ['server_key' => 'typo3', 'name' => 'TYPO3 MCP Server'],
-            ['server_key' => 'custom', 'name' => 'Custom Tools'],
-        ]);
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        $service = $this->createChatService($provider, config: $config, mcpProvider: $mcpProvider);
-        $service->processConversation($conversation);
-
-        self::assertNotNull($capturedMessages);
-        self::assertStringContainsString('typo3__* for TYPO3 MCP Server', $capturedMessages[0]['content']);
-        self::assertStringContainsString('custom__* for Custom Tools', $capturedMessages[0]['content']);
-
-        unset($GLOBALS['BE_USER']);
-    }
-
-    #[Test]
-    public function mcpNamespaceHintIsNotAppendedWhenMcpDisabled(): void
-    {
-        $conversation = new Conversation();
-        $conversation->setBeUser(1);
-        $conversation->appendMessage(MessageRole::User, 'Hello');
-
-        $capturedMessages = null;
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willReturnCallback(
-            function (array $messages) use (&$capturedMessages) {
-                $capturedMessages = $messages;
-                return $this->createCompletionResponse('Hi!');
-            },
-        );
-
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
-
-        $service = $this->createChatService($provider, prompts: ['system_prompt' => 'Base prompt']);
-        $service->processConversation($conversation);
-
-        self::assertNotNull($capturedMessages);
-        self::assertStringNotContainsString('__*', $capturedMessages[0]['content']);
-
-        unset($GLOBALS['BE_USER']);
-    }
-
-    // -------------------------------------------------------------------------
-    // buildFileContentBlock: extraction fallback via DocumentExtractorRegistry
-    // -------------------------------------------------------------------------
-
-    private function createChatServiceWithRegistry(
-        \Netresearch\NrMcpAgent\Document\DocumentExtractorRegistry $registry,
-    ): ChatService {
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willReturn($this->createCompletionResponse('ok'));
-
-        $config = $this->createStub(ExtensionConfiguration::class);
-        $config->method('getLlmTaskUid')->willReturn(1);
-        $config->method('isMcpEnabled')->willReturn(false);
-
-        $model = $this->createMock(\Netresearch\NrLlm\Domain\Model\Model::class);
-        $llmTaskRepository = $this->createMock(\Netresearch\NrMcpAgent\Domain\Repository\LlmTaskRepository::class);
-        $llmTaskRepository->method('resolveModelByTaskUid')->willReturn([
-            'model' => $model,
-            'systemPrompt' => '',
-            'promptTemplate' => '',
-        ]);
-
-        $adapterRegistry = $this->createMock(\Netresearch\NrLlm\Provider\ProviderAdapterRegistryInterface::class);
-        $adapterRegistry->method('createAdapterFromModel')->willReturn($provider);
-
-        return new ChatService(
-            $this->createMock(\Netresearch\NrMcpAgent\Domain\Repository\ConversationRepository::class),
-            $config,
-            $this->createMock(\Netresearch\NrMcpAgent\Mcp\McpToolProviderInterface::class),
-            $llmTaskRepository,
-            $adapterRegistry,
-            $this->createMock(\TYPO3\CMS\Core\Resource\ResourceFactory::class),
-            $this->createMock(\TYPO3\CMS\Core\Site\SiteFinder::class),
-            $registry,
-        );
     }
 
     #[Test]
     public function buildFileContentBlockReturnsTextBlockWhenProviderCannotHandleDocument(): void
     {
-        $provider = $this->createMock(\Netresearch\NrLlm\Provider\Contract\ProviderInterface::class);
+        $provider = $this->createMock(ProviderInterface::class);
 
         $extractor = $this->createMock(\Netresearch\NrMcpAgent\Document\DocumentExtractorInterface::class);
         $extractor->method('isAvailable')->willReturn(true);
         $extractor->method('getSupportedMimeTypes')->willReturn(['text/plain']);
         $extractor->method('extract')->willReturn('Hello TXT');
-        $registry = new \Netresearch\NrMcpAgent\Document\DocumentExtractorRegistry([$extractor]);
+        $registry = new DocumentExtractorRegistry([$extractor]);
 
-        $service = $this->createChatServiceWithRegistry($registry);
+        $service = $this->createChatService(registry: $registry);
 
         $method = new ReflectionMethod($service, 'buildFileContentBlock');
-        $method->setAccessible(true);
 
         $tmpPath = tempnam(sys_get_temp_dir(), 'nr_test_');
         file_put_contents($tmpPath, 'Hello TXT');
@@ -1526,39 +836,67 @@ class ChatServiceTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // buildSystemPrompt: LogicException if resolveProvider() not called first (line 452)
+    // getProviderCapabilities
     // -------------------------------------------------------------------------
 
     #[Test]
-    public function systemPromptFromConversationTakesPrecedenceOverTaskConfig(): void
+    public function getProviderCapabilitiesReturnsPdfForVisionAndDocumentCapableProvider(): void
     {
-        $conversation = new Conversation();
-        $conversation->setBeUser(1);
-        $conversation->setSystemPrompt('Custom prompt');
-        $conversation->appendMessage(MessageRole::User, 'Hello');
+        $provider = $this->createMockForIntersectionOfInterfaces([ProviderInterface::class, VisionCapableInterface::class, DocumentCapableInterface::class]);
+        $provider->method('supportsVision')->willReturn(true);
+        $provider->method('getSupportedImageFormats')->willReturn(['png', 'jpeg', 'webp']);
+        $provider->method('getMaxImageSize')->willReturn(20 * 1024 * 1024);
+        $provider->method('supportsDocuments')->willReturn(true);
+        $provider->method('getSupportedDocumentFormats')->willReturn(['pdf']);
 
-        $capturedMessages = null;
+        $service = $this->createChatService(provider: $provider);
+        $caps = $service->getProviderCapabilities();
+
+        self::assertTrue($caps['visionSupported']);
+        self::assertSame(20 * 1024 * 1024, $caps['maxFileSize']);
+        self::assertContains('png', $caps['supportedFormats']);
+        self::assertContains('pdf', $caps['supportedFormats']);
+    }
+
+    #[Test]
+    public function getProviderCapabilitiesExcludesPdfForVisionOnlyProvider(): void
+    {
+        $provider = $this->createMockForIntersectionOfInterfaces([ProviderInterface::class, VisionCapableInterface::class]);
+        $provider->method('supportsVision')->willReturn(true);
+        $provider->method('getSupportedImageFormats')->willReturn(['png', 'jpeg']);
+        $provider->method('getMaxImageSize')->willReturn(10 * 1024 * 1024);
+
+        $service = $this->createChatService(provider: $provider);
+        $caps = $service->getProviderCapabilities();
+
+        self::assertTrue($caps['visionSupported']);
+        self::assertContains('png', $caps['supportedFormats']);
+        self::assertNotContains('pdf', $caps['supportedFormats']);
+    }
+
+    #[Test]
+    public function getProviderCapabilitiesReturnsEmptyForNonVisionProvider(): void
+    {
         $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('chatCompletion')->willReturnCallback(
-            function (array $messages) use (&$capturedMessages) {
-                $capturedMessages = $messages;
-                return $this->createCompletionResponse('ok');
-            },
-        );
 
-        $GLOBALS['BE_USER'] = new stdClass();
-        $GLOBALS['BE_USER']->uc = ['lang' => 'default'];
+        $service = $this->createChatService(provider: $provider);
+        $caps = $service->getProviderCapabilities();
 
-        $service = $this->createChatService($provider, prompts: ['system_prompt' => 'Task prompt', 'prompt_template' => 'Template']);
-        $service->processConversation($conversation);
+        self::assertFalse($caps['visionSupported']);
+        self::assertSame(0, $caps['maxFileSize']);
+        self::assertSame([], $caps['supportedFormats']);
+    }
 
-        // Conversation-level prompt must win — system message has the custom content
-        $firstMsg = $capturedMessages[0] ?? [];
-        self::assertSame('system', $firstMsg['role'] ?? '');
-        self::assertSame('Custom prompt', $firstMsg['content'] ?? '');
-        // Task-level prompts must NOT appear
-        self::assertStringNotContainsString('Task prompt', (string) ($firstMsg['content'] ?? ''));
+    #[Test]
+    public function getProviderCapabilitiesFallsBackWhenResolutionFails(): void
+    {
+        $taskRepository = $this->createMock(TaskRepository::class);
+        $taskRepository->method('findByUid')->willReturn(null);
 
-        unset($GLOBALS['BE_USER']);
+        $service = $this->createChatService(taskRepository: $taskRepository);
+        $caps = $service->getProviderCapabilities();
+
+        self::assertFalse($caps['visionSupported']);
+        self::assertSame(0, $caps['maxFileSize']);
     }
 }
