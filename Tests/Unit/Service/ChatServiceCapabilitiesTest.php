@@ -4,19 +4,20 @@ declare(strict_types=1);
 
 namespace Netresearch\NrMcpAgent\Tests\Unit\Service;
 
+use Netresearch\NrLlm\Domain\Model\LlmConfiguration;
 use Netresearch\NrLlm\Domain\Model\Model as LlmModel;
+use Netresearch\NrLlm\Domain\Model\Task;
+use Netresearch\NrLlm\Domain\Repository\TaskRepository;
 use Netresearch\NrLlm\Provider\Contract\DocumentCapableInterface;
 use Netresearch\NrLlm\Provider\Contract\ProviderInterface;
 use Netresearch\NrLlm\Provider\Contract\VisionCapableInterface;
 use Netresearch\NrLlm\Provider\ProviderAdapterRegistryInterface;
+use Netresearch\NrLlm\Service\Agent\AgentRuntimeInterface;
 use Netresearch\NrMcpAgent\Configuration\ExtensionConfiguration;
 use Netresearch\NrMcpAgent\Domain\Repository\ConversationRepository;
-use Netresearch\NrMcpAgent\Domain\Repository\LlmTaskRepository;
-use Netresearch\NrMcpAgent\Mcp\McpToolProviderInterface;
 use Netresearch\NrMcpAgent\Service\ChatService;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
-use RuntimeException;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
 use TYPO3\CMS\Core\Site\SiteFinder;
 
@@ -34,15 +35,6 @@ class ChatServiceCapabilitiesTest extends TestCase
         $repository = $this->createMock(ConversationRepository::class);
         $config = $this->createStub(ExtensionConfiguration::class);
         $config->method('getLlmTaskUid')->willReturn(1);
-        $config->method('isMcpEnabled')->willReturn(false);
-        $mcpProvider = $this->createMock(McpToolProviderInterface::class);
-
-        $llmTaskRepository = $this->createMock(LlmTaskRepository::class);
-        $llmTaskRepository->method('resolveModelByTaskUid')->willReturn([
-            'model' => $this->createMock(LlmModel::class),
-            'systemPrompt' => '',
-            'promptTemplate' => '',
-        ]);
 
         $adapterRegistry = $this->createMock(ProviderAdapterRegistryInterface::class);
         $adapterRegistry->method('createAdapterFromModel')->willReturn($provider);
@@ -52,13 +44,33 @@ class ChatServiceCapabilitiesTest extends TestCase
         return new ChatService(
             $repository,
             $config,
-            $mcpProvider,
-            $llmTaskRepository,
+            $this->createMock(AgentRuntimeInterface::class),
+            $this->makeTaskRepository($this->createMock(LlmModel::class)),
             $adapterRegistry,
             $this->createMock(ResourceFactory::class),
             $this->createMock(SiteFinder::class),
             $registry,
         );
+    }
+
+    /**
+     * Build an nr-llm TaskRepository whose Task resolves to a Configuration
+     * exposing the given fixed model (or none when $model is null).
+     */
+    private function makeTaskRepository(?LlmModel $model): TaskRepository
+    {
+        $configuration = $this->createMock(LlmConfiguration::class);
+        $configuration->method('getSystemPrompt')->willReturn('');
+        $configuration->method('getLlmModel')->willReturn($model);
+
+        $task = $this->createMock(Task::class);
+        $task->method('getConfiguration')->willReturn($configuration);
+        $task->method('getPromptTemplate')->willReturn('');
+
+        $taskRepository = $this->createMock(TaskRepository::class);
+        $taskRepository->method('findByUid')->willReturn($task);
+
+        return $taskRepository;
     }
 
     // -------------------------------------------------------------------------
@@ -167,23 +179,20 @@ class ChatServiceCapabilitiesTest extends TestCase
     #[Test]
     public function returnsNoVisionWhenProviderResolutionFails(): void
     {
-        $provider = $this->createMock(ProviderInterface::class);
         $repository = $this->createMock(ConversationRepository::class);
         $config = $this->createStub(ExtensionConfiguration::class);
         $config->method('getLlmTaskUid')->willReturn(1);
-        $config->method('isMcpEnabled')->willReturn(false);
 
-        $llmTaskRepository = $this->createMock(LlmTaskRepository::class);
-        $llmTaskRepository->method('resolveModelByTaskUid')->willThrowException(new RuntimeException('Model not found'));
+        // Configuration has no fixed model → provider resolution throws → caught.
+        $taskRepository = $this->makeTaskRepository(null);
 
         $adapterRegistry = $this->createMock(ProviderAdapterRegistryInterface::class);
-        $adapterRegistry->method('createAdapterFromModel')->willReturn($provider);
 
         $service = new ChatService(
             $repository,
             $config,
-            $this->createMock(McpToolProviderInterface::class),
-            $llmTaskRepository,
+            $this->createMock(AgentRuntimeInterface::class),
+            $taskRepository,
             $adapterRegistry,
             $this->createMock(ResourceFactory::class),
             $this->createMock(SiteFinder::class),

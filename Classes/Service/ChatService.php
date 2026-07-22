@@ -5,33 +5,55 @@ declare(strict_types=1);
 namespace Netresearch\NrMcpAgent\Service;
 
 use LogicException;
-use Netresearch\NrLlm\Domain\Model\CompletionResponse;
-use Netresearch\NrLlm\Domain\ValueObject\ToolCall;
-use Netresearch\NrLlm\Domain\ValueObject\ToolSpec;
+use Netresearch\NrLlm\Domain\Enum\AgentRunOutcome;
+use Netresearch\NrLlm\Domain\Model\LlmConfiguration;
+use Netresearch\NrLlm\Domain\Repository\TaskRepository;
+use Netresearch\NrLlm\Domain\ValueObject\ChatMessage;
 use Netresearch\NrLlm\Provider\Contract\DocumentCapableInterface;
 use Netresearch\NrLlm\Provider\Contract\ProviderInterface;
-use Netresearch\NrLlm\Provider\Contract\ToolCapableInterface;
 use Netresearch\NrLlm\Provider\Contract\VisionCapableInterface;
 use Netresearch\NrLlm\Provider\ProviderAdapterRegistryInterface;
+use Netresearch\NrLlm\Service\Agent\AgentRunRequest;
+use Netresearch\NrLlm\Service\Agent\AgentRunResult;
+use Netresearch\NrLlm\Service\Agent\AgentRuntimeInterface;
 use Netresearch\NrMcpAgent\Configuration\ExtensionConfiguration;
 use Netresearch\NrMcpAgent\Document\DocumentExtractorRegistry;
 use Netresearch\NrMcpAgent\Domain\Model\Conversation;
 use Netresearch\NrMcpAgent\Domain\Repository\ConversationRepository;
-use Netresearch\NrMcpAgent\Domain\Repository\LlmTaskRepository;
 use Netresearch\NrMcpAgent\Enum\ConversationStatus;
 use Netresearch\NrMcpAgent\Enum\MessageRole;
 use Netresearch\NrMcpAgent\Exception\ChatException;
-use Netresearch\NrMcpAgent\Mcp\McpToolProviderInterface;
+use Netresearch\NrMcpAgent\Exception\Exception as NrMcpAgentException;
 use Netresearch\NrMcpAgent\Utility\ErrorMessageSanitizer;
 use Throwable;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
 use TYPO3\CMS\Core\Site\SiteFinder;
 
+/**
+ * Runs a backend chat turn through nr-llm's AgentRuntime.
+ *
+ * The whole tool loop is delegated to nr-llm: the AgentRuntime drives the
+ * model over nr-llm's own ToolRegistry (its ~45 builtin backend tools) and
+ * returns the settled result synchronously. This service only resolves the
+ * LlmConfiguration the chat should use, builds the message transcript (with a
+ * strong TYPO3-backend identity system prompt), and maps the run outcome back
+ * onto the conversation. Tools are no longer sourced from MCP servers here.
+ */
 final class ChatService implements ChatCapabilitiesInterface
 {
-    private const MAX_TOOL_ITERATIONS = 20;
-    private const MAX_LLM_RETRIES = 2;
-    private const LLM_RETRY_DELAY_SECONDS = 3;
+    /**
+     * Base identity and behaviour contract, prepended to every system prompt so
+     * the assistant states who it is, is steered to use its tools instead of
+     * asking the user to paste data, and never claims to be ChatGPT/OpenAI —
+     * even when the configured Task/Configuration prompt is weak or empty.
+     */
+    private const IDENTITY_PROMPT = <<<'PROMPT'
+        You are "TYPO3 Backend AI Chat by Netresearch", an AI assistant embedded directly in the TYPO3 backend of this website. You assist backend administrators and editors with managing, inspecting and troubleshooting this TYPO3 installation.
+
+        You have direct access to tools that inspect and act on THIS TYPO3 system — for example reading the system log and last exceptions, checking system status, listing deprecations, and reading or searching content records. Whenever a question can be answered by looking something up or by performing an action, USE the appropriate tool and work from its result. Do not ask the user to paste logs, copy data, or describe what they see when a tool can retrieve it for you.
+
+        Never claim to be ChatGPT or GPT, and never claim to be made by OpenAI or any other vendor: you are the Netresearch TYPO3 Backend AI Chat. Always answer in the same language the user writes in.
+        PROMPT;
 
     /** @var array{system_prompt: string, prompt_template: string}|null */
     private ?array $resolvedPrompts = null;
@@ -39,8 +61,8 @@ final class ChatService implements ChatCapabilitiesInterface
     public function __construct(
         private readonly ConversationRepository $repository,
         private readonly ExtensionConfiguration $config,
-        private readonly McpToolProviderInterface $mcpToolProvider,
-        private readonly LlmTaskRepository $llmTaskRepository,
+        private readonly AgentRuntimeInterface $agentRuntime,
+        private readonly TaskRepository $taskRepository,
         private readonly ProviderAdapterRegistryInterface $adapterRegistry,
         private readonly ResourceFactory $resourceFactory,
         private readonly SiteFinder $siteFinder,
@@ -55,7 +77,8 @@ final class ChatService implements ChatCapabilitiesInterface
         $extractionFormats = $this->documentExtractorRegistry->getAvailableExtensions();
 
         try {
-            $provider = $this->resolveProvider();
+            $configuration = $this->resolveConfiguration();
+            $provider = $this->resolveProvider($configuration);
             if ($provider instanceof VisionCapableInterface && $provider->supportsVision()) {
                 $documentFormats = $provider instanceof DocumentCapableInterface && $provider->supportsDocuments()
                     ? $provider->getSupportedDocumentFormats()
@@ -94,287 +117,147 @@ final class ChatService implements ChatCapabilitiesInterface
         }
 
         try {
-            $tools = $this->mcpToolProvider->getToolDefinitions();
-
-            if ($tools !== []) {
-                $this->runAgentLoop($conversation, $tools);
-            } else {
-                $this->runSimpleChat($conversation);
-            }
+            $configuration = $this->resolveConfiguration();
+            $this->runAgentTurn($conversation, $configuration);
         } catch (Throwable $e) {
             $conversation->setStatus(ConversationStatus::Failed);
             $conversation->setErrorMessage(ErrorMessageSanitizer::sanitize($e->getMessage()));
             $this->persist($conversation);
-        } finally {
-            $this->mcpToolProvider->disconnect();
         }
     }
 
     public function resumeConversation(Conversation $conversation): void
     {
-        $this->resolvedPrompts = null;
-
         if (!$conversation->isResumable()) {
             return;
         }
 
-        if ($this->config->getLlmTaskUid() === 0) {
-            $conversation->setStatus(ConversationStatus::Failed);
-            $conversation->setErrorMessage('No nr-llm Task configured. Set llmTaskUid in Extension Configuration.');
-            $this->persist($conversation);
-            return;
-        }
-
-        try {
-            if ($conversation->hasPendingToolCalls()) {
-                $messages = $conversation->getDecodedMessages();
-                /** @var array{tool_calls: array<mixed>} $lastMessage */
-                $lastMessage = end($messages);
-                $toolResults = $this->executeToolCalls($lastMessage['tool_calls']);
-                $messages = $conversation->getDecodedMessages();
-                foreach ($toolResults as $result) {
-                    $messages[] = [
-                        'role' => 'tool',
-                        'tool_call_id' => $result['tool_call_id'],
-                        'content' => $result['content'],
-                    ];
-                }
-                $conversation->setMessages($messages);
-                $this->persist($conversation);
-            }
-
-            $tools = $this->mcpToolProvider->getToolDefinitions();
-
-            if ($tools !== []) {
-                $this->runAgentLoop($conversation, $tools);
-            } else {
-                $this->runSimpleChat($conversation);
-            }
-        } catch (Throwable $e) {
-            $conversation->setStatus(ConversationStatus::Failed);
-            $conversation->setErrorMessage(ErrorMessageSanitizer::sanitize($e->getMessage()));
-            $this->persist($conversation);
-        } finally {
-            $this->mcpToolProvider->disconnect();
-        }
+        // The AgentRuntime drives the entire tool loop synchronously, so a turn
+        // never leaves persisted pending tool calls to replay. Resuming a
+        // Processing/ToolLoop/Failed conversation therefore simply re-runs the
+        // turn over the existing transcript.
+        $this->processConversation($conversation);
     }
 
     /**
-     * Simple chat without tools — fast path for when MCP is disabled.
+     * Build the transcript and hand the whole turn to nr-llm's AgentRuntime,
+     * which runs the tool loop over nr-llm's ToolRegistry and settles the result.
      */
-    private function runSimpleChat(Conversation $conversation): void
+    private function runAgentTurn(Conversation $conversation, LlmConfiguration $configuration): void
     {
         $conversation->setStatus(ConversationStatus::Processing);
         $this->repository->updateStatus($conversation->getUid(), ConversationStatus::Processing, $conversation->getBeUser());
 
-        $provider = $this->resolveProvider();
-        $systemPrompt = $this->buildSystemPrompt($conversation);
-        $messages = $this->buildLlmMessages($conversation->getDecodedMessages(), $provider);
+        // The provider is resolved only to expand file attachments into the
+        // multimodal wire shape (image/document capability); the chat itself
+        // runs entirely inside the AgentRuntime against the configuration.
+        $provider = $this->resolveProvider($configuration);
 
+        $systemPrompt = $this->buildSystemPrompt($conversation);
+
+        // buildLlmMessages expands fileUid refs to base64 for the LLM call only —
+        // the expanded arrays are never persisted back to the conversation.
+        $messages = [];
         if ($systemPrompt !== '') {
-            array_unshift($messages, ['role' => 'system', 'content' => $systemPrompt]);
+            $messages[] = ChatMessage::system($systemPrompt);
+        }
+        foreach ($this->buildLlmMessages($conversation->getDecodedMessages(), $provider) as $message) {
+            $messages[] = $message;
         }
 
-        $response = $this->callChatWithRetry($provider, $messages);
+        // allowedToolNames is left at its null default: offer the whole
+        // globally-enabled tool set (the runtime's own gate is authoritative).
+        $result = $this->agentRuntime->run(new AgentRunRequest(
+            configuration: $configuration,
+            messages: $messages,
+            beUserUid: $conversation->getBeUser(),
+        ));
 
-        $conversation->appendMessage(MessageRole::Assistant, $response->content);
-        $conversation->setStatus(ConversationStatus::Idle);
-        $this->persist($conversation);
+        $this->applyResult($conversation, $result);
     }
 
     /**
-     * Agent loop with MCP tools — used when tools are available.
-     *
-     * @param list<array{type: string, function: array{name: string, description: string, parameters: array<string, mixed>}}> $tools
+     * Map the settled AgentRuntime result onto the conversation: the final
+     * assistant answer on completion, a Failed status with a sanitized reason
+     * for any other outcome.
      */
-    private function runAgentLoop(
-        Conversation $conversation,
-        array $tools,
-    ): void {
-        $conversation->setStatus(ConversationStatus::Processing);
-        $this->repository->updateStatus($conversation->getUid(), ConversationStatus::Processing, $conversation->getBeUser());
-
-        $provider = $this->resolveProvider();
-        if (!$provider instanceof ToolCapableInterface) {
-            throw new ChatException(sprintf(
-                'Provider "%s" does not support tool calling',
-                $provider->getIdentifier(),
-            ));
-        }
-
-        $systemPrompt = $this->buildSystemPrompt($conversation);
-        $optionsArray = array_filter([
-            'system_prompt' => $systemPrompt,
-            'tool_choice' => 'auto',
-        ]);
-
-        // Providers expect typed ToolSpec instances; MCP delivers the wire shape.
-        $toolSpecs = array_map(ToolSpec::fromArray(...), $tools);
-
-        for ($i = 0; $i < self::MAX_TOOL_ITERATIONS; $i++) {
-            // buildLlmMessages expands fileUid refs to base64 for the LLM call only —
-            // never persist the expanded result back to DB.
-            $messages = $this->buildLlmMessages($conversation->getDecodedMessages(), $provider);
-
-            $response = $this->callToolChatWithRetry($provider, $messages, $toolSpecs, $optionsArray);
-
-            if ($response->hasToolCalls()) {
-                // Normalise typed ToolCall objects to the legacy wire shape —
-                // conversations persist tool calls as JSON, and resumed
-                // conversations replay them as plain arrays anyway. Malformed
-                // entries are dropped instead of failing the conversation.
-                $toolCalls = [];
-                foreach ($response->toolCalls ?? [] as $call) {
-                    if ($call instanceof ToolCall) {
-                        $toolCalls[] = $call->toArray();
-                    } elseif (is_array($call)) {
-                        $toolCalls[] = $call;
-                    }
-                }
-                // Append assistant + tool messages to the stored (non-expanded) messages
-                $storedMessages = $conversation->getDecodedMessages();
-                $storedMessages[] = [
-                    'role' => 'assistant',
-                    'content' => $response->content,
-                    'tool_calls' => $toolCalls,
-                ];
-                $conversation->setMessages($storedMessages);
-                $this->persist($conversation);
-
-                $conversation->setStatus(ConversationStatus::ToolLoop);
-                $toolResults = $this->executeToolCalls($toolCalls);
-                $storedMessages = $conversation->getDecodedMessages();
-                foreach ($toolResults as $result) {
-                    $storedMessages[] = [
-                        'role' => 'tool',
-                        'tool_call_id' => $result['tool_call_id'],
-                        'content' => $result['content'],
-                    ];
-                }
-                $conversation->setMessages($storedMessages);
-                $this->persist($conversation);
-                continue;
-            }
-
-            $conversation->appendMessage(MessageRole::Assistant, $response->content);
+    private function applyResult(Conversation $conversation, AgentRunResult $result): void
+    {
+        if ($result->outcome === AgentRunOutcome::COMPLETED && $result->loopResult !== null) {
+            $conversation->appendMessage(MessageRole::Assistant, $result->loopResult->finalContent);
             $conversation->setStatus(ConversationStatus::Idle);
             $this->persist($conversation);
             return;
         }
 
         $conversation->setStatus(ConversationStatus::Failed);
-        $conversation->setErrorMessage('Max tool iterations reached');
+        $conversation->setErrorMessage($this->describeFailure($result));
         $this->persist($conversation);
     }
 
     /**
-     * @param list<array<string, mixed>> $messages
+     * Turn a non-completed run outcome into a human-readable message. A default
+     * arm is mandatory: AgentRunOutcome gains cases in nr-llm minor releases.
      */
-    private function callChatWithRetry(
-        ProviderInterface $provider,
-        array $messages,
-    ): CompletionResponse {
-        $lastException = null;
-        for ($attempt = 0; $attempt <= self::MAX_LLM_RETRIES; $attempt++) {
-            try {
-                return $provider->chatCompletion($messages, []);
-            } catch (Throwable $e) {
-                $lastException = $e;
-                if (!$this->isTransientError($e) || $attempt >= self::MAX_LLM_RETRIES) {
-                    throw $e;
-                }
-                sleep(self::LLM_RETRY_DELAY_SECONDS * ($attempt + 1));
-            }
-        }
-        throw $lastException;
-    }
-
-    /**
-     * @param list<array<string, mixed>> $messages
-     * @param list<ToolSpec> $tools
-     * @param array<string, mixed> $options
-     */
-    private function callToolChatWithRetry(
-        ToolCapableInterface $provider,
-        array $messages,
-        array $tools,
-        array $options,
-    ): CompletionResponse {
-        $lastException = null;
-        for ($attempt = 0; $attempt <= self::MAX_LLM_RETRIES; $attempt++) {
-            try {
-                return $provider->chatCompletionWithTools($messages, $tools, $options);
-            } catch (Throwable $e) {
-                $lastException = $e;
-                if (!$this->isTransientError($e) || $attempt >= self::MAX_LLM_RETRIES) {
-                    throw $e;
-                }
-                sleep(self::LLM_RETRY_DELAY_SECONDS * ($attempt + 1));
-            }
-        }
-        throw $lastException;
-    }
-
-    private function isTransientError(Throwable $e): bool
+    private function describeFailure(AgentRunResult $result): string
     {
-        return str_contains($e->getMessage(), '429')
-            || str_contains($e->getMessage(), '503')
-            || str_contains($e->getMessage(), 'rate')
-            || str_contains($e->getMessage(), 'overloaded');
+        if ($result->error !== null) {
+            return ErrorMessageSanitizer::sanitize($result->error->getMessage());
+        }
+
+        // Only reference AgentRunOutcome cases guaranteed by the minimum
+        // supported nr-llm (^0.23.1); newer cases fall through to the default.
+        return match ($result->outcome) {
+            AgentRunOutcome::AWAITING_APPROVAL => 'The assistant needs additional confirmation before it can continue, which this chat cannot handle yet.',
+            AgentRunOutcome::GUARDRAIL_BLOCKED,
+            AgentRunOutcome::GUARDRAIL_APPROVAL_REQUIRED => 'The request was blocked by a safety guardrail.',
+            default => sprintf('The assistant run did not complete (%s).', $result->outcome->value),
+        };
     }
 
     /**
-     * Resolve a fully configured provider adapter from the task chain.
+     * Resolve the LlmConfiguration the chat should use from the configured
+     * nr-llm Task (llmTaskUid → Task → Configuration) and cache the Task and
+     * Configuration prompts for {@see buildSystemPrompt()}.
      *
-     * Follows: Task → Configuration → Model → Provider (DB entities),
-     * then uses the ProviderAdapterRegistryInterface implementation to create a configured adapter instance.
+     * @throws NrMcpAgentException when the Task or its Configuration is missing
      */
-    private function resolveProvider(): ProviderInterface
+    private function resolveConfiguration(): LlmConfiguration
     {
         $taskUid = $this->config->getLlmTaskUid();
-        $resolved = $this->llmTaskRepository->resolveModelByTaskUid($taskUid);
+        $task = $this->taskRepository->findByUid($taskUid);
+        if ($task === null) {
+            throw new NrMcpAgentException(sprintf('nr-llm Task with uid %d not found', $taskUid));
+        }
+
+        $configuration = $task->getConfiguration();
+        if ($configuration === null) {
+            throw new NrMcpAgentException(sprintf('nr-llm Task with uid %d has no LLM configuration assigned', $taskUid));
+        }
 
         $this->resolvedPrompts = [
-            'system_prompt' => $resolved['systemPrompt'],
-            'prompt_template' => $resolved['promptTemplate'],
+            'system_prompt' => $configuration->getSystemPrompt(),
+            'prompt_template' => $task->getPromptTemplate(),
         ];
 
-        return $this->adapterRegistry->createAdapterFromModel($resolved['model']);
+        return $configuration;
     }
 
     /**
-     * @param array<mixed> $toolCalls
-     * @return list<array{tool_call_id: mixed, content: string}>
+     * Create a configured provider adapter for the configuration's fixed model.
+     * Used only for multimodal file expansion and capability reporting — the
+     * chat turn itself runs through the AgentRuntime.
+     *
+     * @throws NrMcpAgentException when the configuration has no fixed model
      */
-    private function executeToolCalls(array $toolCalls): array
+    private function resolveProvider(LlmConfiguration $configuration): ProviderInterface
     {
-        $results = [];
-        foreach ($toolCalls as $call) {
-            if (!is_array($call)) {
-                continue;
-            }
-            /** @var array<string, mixed> $callData */
-            $callData = $call;
-            /** @var array<string, mixed> $function */
-            $function = is_array($callData['function'] ?? null) ? $callData['function'] : [];
-            $nameRaw = $function['name'] ?? $callData['name'] ?? '';
-            $functionName = is_string($nameRaw) ? $nameRaw : '';
-            $arguments = $function['arguments'] ?? $callData['input'] ?? [];
-            if (is_string($arguments)) {
-                /** @var array<string, mixed> $arguments */
-                $arguments = json_decode($arguments, true) ?? [];
-            }
-            if (!is_array($arguments)) {
-                $arguments = [];
-            }
-            /** @var array<string, mixed> $arguments */
-            $result = $this->mcpToolProvider->executeTool($functionName, $arguments);
-            $results[] = [
-                'tool_call_id' => $callData['id'] ?? null,
-                'content' => $result,
-            ];
+        $model = $configuration->getLlmModel();
+        if ($model === null) {
+            throw new NrMcpAgentException('The nr-llm configuration has no fixed model to resolve a provider adapter from.');
         }
-        return $results;
+
+        return $this->adapterRegistry->createAdapterFromModel($model);
     }
 
     /**
@@ -461,16 +344,19 @@ final class ChatService implements ChatCapabilitiesInterface
 
     private function buildSystemPrompt(Conversation $conversation): string
     {
-        $parts = [];
+        // The identity/behaviour contract is always the first layer so the
+        // assistant's identity and tool-seeking behaviour hold regardless of
+        // how the Task/Configuration prompt is (mis)configured.
+        $parts = [self::IDENTITY_PROMPT];
 
-        // 1. Conversation-level custom prompt (highest priority)
+        // 1. Conversation-level custom prompt (highest-priority task instructions)
         $custom = $conversation->getSystemPrompt();
         if ($custom !== '') {
             $parts[] = $custom;
         } else {
-            // 2. Build from nr-llm Task prompt_template + Configuration system_prompt
+            // 2. Task Configuration system_prompt + Task prompt_template
             if ($this->resolvedPrompts === null) {
-                throw new LogicException('resolveProvider() must be called before buildSystemPrompt()');
+                throw new LogicException('resolveConfiguration() must be called before buildSystemPrompt()');
             }
 
             $configPrompt = $this->resolvedPrompts['system_prompt'];
@@ -482,20 +368,6 @@ final class ChatService implements ChatCapabilitiesInterface
             if ($taskPrompt !== '') {
                 $parts[] = $taskPrompt;
             }
-
-            // 3. Fallback: locale-based default if nothing configured
-            if ($parts === []) {
-                $beUser = $GLOBALS['BE_USER'] ?? null;
-                /** @var array<string, mixed> $uc */
-                $uc = is_object($beUser) && isset($beUser->uc) && is_array($beUser->uc) ? $beUser->uc : [];
-                $langRaw = $uc['lang'] ?? 'default';
-                $lang = is_string($langRaw) ? $langRaw : 'default';
-
-                $parts[] = match ($lang) {
-                    'de' => 'Du bist ein TYPO3-Assistent. Du hilfst beim Verwalten von Inhalten über die verfügbaren Tools. Antworte auf Deutsch.',
-                    default => 'You are a TYPO3 assistant. You help manage content using the available tools. Respond in English.',
-                };
-            }
         }
 
         // Always append site language context so the LLM knows which
@@ -503,12 +375,6 @@ final class ChatService implements ChatCapabilitiesInterface
         $languageContext = $this->buildSiteLanguagesContext();
         if ($languageContext !== '') {
             $parts[] = $languageContext;
-        }
-
-        // Append MCP tool namespace hints so the LLM knows which tool family to use
-        $namespaceHint = $this->buildMcpNamespaceHint();
-        if ($namespaceHint !== '') {
-            $parts[] = $namespaceHint;
         }
 
         return implode("\n\n", $parts);
@@ -583,36 +449,6 @@ final class ChatService implements ChatCapabilitiesInterface
 
         return "Available site languages — always set sys_language_uid when creating or updating content:\n"
             . implode("\n", $lines);
-    }
-
-    /**
-     * Builds a namespace hint for the system prompt listing active MCP servers.
-     */
-    private function buildMcpNamespaceHint(): string
-    {
-        if (!$this->config->isMcpEnabled()) {
-            return '';
-        }
-
-        $activeServers = $this->mcpToolProvider->getActiveServers();
-        if ($activeServers === []) {
-            return '';
-        }
-
-        $hints = [];
-        foreach ($activeServers as $server) {
-            $key = is_string($server['server_key'] ?? null) ? $server['server_key'] : '';
-            $name = is_string($server['name'] ?? null) ? $server['name'] : '';
-            if ($key !== '') {
-                $hints[] = $key . '__* for ' . $name;
-            }
-        }
-
-        if ($hints === []) {
-            return '';
-        }
-
-        return 'Available tools are namespaced by source: ' . implode(', ', $hints) . '.';
     }
 
     private function persist(Conversation $conversation): void
