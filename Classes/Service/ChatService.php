@@ -8,6 +8,7 @@ use LogicException;
 use Netresearch\NrLlm\Domain\Enum\AgentRunOutcome;
 use Netresearch\NrLlm\Domain\Model\LlmConfiguration;
 use Netresearch\NrLlm\Domain\Repository\TaskRepository;
+use Netresearch\NrLlm\Domain\ValueObject\AiActorContext;
 use Netresearch\NrLlm\Domain\ValueObject\ChatMessage;
 use Netresearch\NrLlm\Provider\Contract\DocumentCapableInterface;
 use Netresearch\NrLlm\Provider\Contract\ProviderInterface;
@@ -26,6 +27,7 @@ use Netresearch\NrMcpAgent\Exception\ChatException;
 use Netresearch\NrMcpAgent\Exception\Exception as NrMcpAgentException;
 use Netresearch\NrMcpAgent\Utility\ErrorMessageSanitizer;
 use Throwable;
+use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
 use TYPO3\CMS\Core\Site\SiteFinder;
 
@@ -170,10 +172,41 @@ final class ChatService implements ChatCapabilitiesInterface
         $result = $this->agentRuntime->run(new AgentRunRequest(
             configuration: $configuration,
             messages: $messages,
-            beUserUid: $conversation->getBeUser(),
+            actor: $this->resolveActor($conversation->getBeUser()),
         ));
 
         $this->applyResult($conversation, $result);
+    }
+
+    /**
+     * Build the actor that drives the run from the live backend user the entry
+     * commands (ChatWorkerCommand/ProcessChatCommand) already initialise via
+     * {@see BackendUserInitializer::initialize()}, so the run authorises against
+     * that user's admin flag and backend groups — exactly as the removed
+     * `beUserUid` did in nr-llm 0.23. Never a service account: the run belongs to
+     * a specific backend user, and a scopeless service account may do nothing.
+     *
+     * The conversation only stores the bare uid; the live `$GLOBALS['BE_USER']`
+     * is the authoritative source for the admin flag and group ids. The uid-only
+     * fallback keeps the class testable and never hard-crashes if the global is
+     * absent (isolation / misuse) — ownership still holds through the uid.
+     */
+    private function resolveActor(int $beUserUid): AiActorContext
+    {
+        $backendUser = $GLOBALS['BE_USER'] ?? null;
+        if ($beUserUid > 0 && $backendUser instanceof BackendUserAuthentication) {
+            $liveUid = $backendUser->user['uid'] ?? null;
+            if (is_numeric($liveUid) && (int) $liveUid === $beUserUid) {
+                $groupIds = array_values(array_map(
+                    static fn(mixed $id): int => is_numeric($id) ? (int) $id : 0,
+                    $backendUser->userGroupsUID,
+                ));
+
+                return AiActorContext::backendUser($beUserUid, $backendUser->isAdmin(), $groupIds);
+            }
+        }
+
+        return AiActorContext::backendUser($beUserUid);
     }
 
     /**

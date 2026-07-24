@@ -30,6 +30,7 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use RuntimeException;
+use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Localization\Locale;
 use TYPO3\CMS\Core\Resource\File;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
@@ -197,7 +198,38 @@ class ChatServiceTest extends TestCase
         self::assertSame($this->configuration, $this->capturedRequest->configuration);
         // null allowed-tool list => offer the whole registered/enabled set.
         self::assertNull($this->capturedRequest->allowedToolNames);
-        self::assertSame(42, $this->capturedRequest->beUserUid);
+        // The run carries the conversation's backend user as its actor (not a
+        // service account). Without a live $GLOBALS['BE_USER'], resolveActor()
+        // takes the uid-only fallback but still preserves ownership.
+        self::assertSame(42, $this->capturedRequest->actor->backendUserUid);
+        self::assertFalse($this->capturedRequest->actor->isServiceAccount());
+    }
+
+    #[Test]
+    public function agentRunActorCarriesLiveBackendUserAdminFlagAndGroups(): void
+    {
+        $conversation = new Conversation();
+        $conversation->setBeUser(42);
+        $conversation->appendMessage(MessageRole::User, 'Hello');
+
+        $backendUser = $this->createStub(BackendUserAuthentication::class);
+        $backendUser->user = ['uid' => 42];
+        $backendUser->userGroupsUID = [1, 2];
+        $backendUser->method('isAdmin')->willReturn(true);
+        $GLOBALS['BE_USER'] = $backendUser;
+
+        try {
+            $service = $this->createChatService();
+            $service->processConversation($conversation);
+        } finally {
+            unset($GLOBALS['BE_USER']);
+        }
+
+        self::assertNotNull($this->capturedRequest);
+        self::assertSame(42, $this->capturedRequest->actor->backendUserUid);
+        self::assertTrue($this->capturedRequest->actor->isAdmin);
+        self::assertSame([1, 2], $this->capturedRequest->actor->backendGroupIds);
+        self::assertFalse($this->capturedRequest->actor->isServiceAccount());
     }
 
     #[Test]

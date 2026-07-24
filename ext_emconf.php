@@ -4,7 +4,7 @@ $EM_CONF[$_EXTKEY] = [
     'title' => 'AI Chat',
     'description' => 'AI chat assistant for the TYPO3 backend',
     'category' => 'module',
-    'version' => '0.6.6',
+    'version' => '0.7.0',
     'state' => 'alpha',
     'author' => 'Netresearch DTT GmbH',
     'author_email' => 'typo3@netresearch.de',
@@ -13,7 +13,7 @@ $EM_CONF[$_EXTKEY] = [
         'depends' => [
             'php' => '8.2.0-8.99.99',
             'typo3' => '13.4.0-14.99.99',
-            'nr_llm' => '0.22.0-0.99.99',
+            'nr_llm' => '0.25.0-0.99.99',
         ],
     ],
 ];
