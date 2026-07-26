@@ -12,7 +12,7 @@ or open **Tools > TYPO3 AI Chat** for the full operator console. Both surfaces
 use the same conversations, attachments, approvals and execution ledger. The
 drawer's expand button opens the full module when more room is useful.
 
-..  figure:: /Images/InlineDrawer.png
+..  figure:: /Images/InlineDrawer.jpg
     :alt: TYPO3 AI Chat inline drawer opened from the top-right toolbar
 
     The inline drawer keeps chat, lane selection, attachments, and execution
@@ -24,7 +24,7 @@ The full interface has three working areas:
 * the assistant-ui thread and attachment composer in the centre;
 * the execution ledger on the right.
 
-..  figure:: /Images/OperatorConsole.png
+..  figure:: /Images/OperatorConsole.jpg
     :alt: Full TYPO3 AI Chat operator console with execution ledger
 
     The full Tools module combines conversation history, the assistant thread,

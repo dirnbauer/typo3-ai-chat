@@ -36,12 +36,12 @@ Git history is retained in this repository and the detailed attribution is in
 - **Safe migration** — an idempotent command copies conversations and MCP server
   records from nr-mcp-agent before the old extension is removed.
 
-![Full TYPO3 AI Chat operator console](Documentation/Images/OperatorConsole.png)
+![Full TYPO3 AI Chat operator console](Documentation/Images/OperatorConsole.jpg)
 
 The compact toolbar surface keeps the same conversations and governed execution
 controls available without leaving the current TYPO3 module:
 
-![Inline TYPO3 AI Chat drawer](Documentation/Images/InlineDrawer.png)
+![Inline TYPO3 AI Chat drawer](Documentation/Images/InlineDrawer.jpg)
 
 ## Architecture
 
