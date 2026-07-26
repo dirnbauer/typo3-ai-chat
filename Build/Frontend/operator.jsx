@@ -166,11 +166,15 @@ function storedAttachments(message) {
 
 function mapInitialMessages(messages) {
     return messages
-        .filter(message => message.role === 'user' || message.role === 'assistant')
+        .filter(message => {
+            if (message.role !== 'user' && message.role !== 'assistant') return false;
+            return messageText(message).trim() !== '' || storedAttachments(message).length > 0;
+        })
         .map(message => ({
             role: message.role,
             content: [{type: 'text', text: messageText(message)}],
             createdAt: message.createdAt ? new Date(message.createdAt) : new Date(),
+            status: {type: 'complete', reason: 'stop'},
             metadata: {
                 custom: {
                     storedAttachments: storedAttachments(message),
