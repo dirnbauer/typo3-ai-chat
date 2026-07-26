@@ -259,38 +259,54 @@ readonly class ConversationRepository
 
     /**
      * Atomically claim one 'processing' conversation for a worker.
-     * Uses UPDATE...LIMIT 1 with row-level locking to prevent race conditions.
+     * Selects the oldest candidate, then uses a compare-and-swap update. If
+     * another worker wins the race, the next candidate is tried. This remains
+     * atomic without vendor-specific UPDATE ORDER BY/LIMIT syntax.
      */
     public function dequeueForWorker(string $workerId): ?Conversation
     {
         $conn = $this->connectionPool->getConnectionForTable(self::TABLE);
 
-        $affected = $conn->executeStatement(
-            'UPDATE ' . self::TABLE . '
-             SET status = ?, current_request_id = ?
-             WHERE status = ? AND deleted = ?
-             ORDER BY tstamp ASC LIMIT 1',
-            [ConversationStatus::Locked->value, $workerId, ConversationStatus::Processing->value, 0],
-        );
+        for ($attempt = 0; $attempt < 10; ++$attempt) {
+            $qb = $this->connectionPool->getQueryBuilderForTable(self::TABLE);
+            $candidateUid = $qb->select('uid')
+                ->from(self::TABLE)
+                ->where(
+                    $qb->expr()->eq('status', $qb->createNamedParameter(ConversationStatus::Processing->value)),
+                    $qb->expr()->eq('deleted', $qb->createNamedParameter(0)),
+                )
+                ->orderBy('tstamp', 'ASC')
+                ->addOrderBy('uid', 'ASC')
+                ->setMaxResults(1)
+                ->executeQuery()
+                ->fetchOne();
 
-        if ($affected === 0) {
-            return null;
+            if ($candidateUid === false) {
+                return null;
+            }
+            if (!is_int($candidateUid) && !is_string($candidateUid)) {
+                return null;
+            }
+            $candidateUid = (int) $candidateUid;
+
+            $affected = $conn->executeStatement(
+                'UPDATE ' . self::TABLE . '
+                 SET status = ?, current_request_id = ?
+                 WHERE uid = ? AND status = ? AND deleted = ?',
+                [
+                    ConversationStatus::Locked->value,
+                    $workerId,
+                    $candidateUid,
+                    ConversationStatus::Processing->value,
+                    0,
+                ],
+            );
+
+            if ($affected === 1) {
+                return $this->findByUid($candidateUid);
+            }
         }
 
-        $qb = $this->connectionPool->getQueryBuilderForTable(self::TABLE);
-        $row = $qb->select('*')
-            ->from(self::TABLE)
-            ->where(
-                $qb->expr()->eq('current_request_id', $qb->createNamedParameter($workerId)),
-                $qb->expr()->eq('status', $qb->createNamedParameter(ConversationStatus::Locked->value)),
-            )
-            ->executeQuery()
-            ->fetchAssociative();
-
-        if ($row === false) {
-            return null;
-        }
-
-        return Conversation::fromRow($row);
+        return null;
     }
 }

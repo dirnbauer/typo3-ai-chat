@@ -72,7 +72,7 @@ class ChatModuleControllerTest extends FunctionalTestCase
         self::assertSame(200, $response->getStatusCode());
 
         $body = (string) $response->getBody();
-        self::assertStringContainsString('<wc-chat-app', $body);
+        self::assertStringContainsString('<wc-typo3-ai-chat', $body);
         self::assertStringContainsString('data-max-length=', $body);
     }
 }

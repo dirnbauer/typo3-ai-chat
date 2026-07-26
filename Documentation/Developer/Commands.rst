@@ -66,7 +66,8 @@ Used by the ``worker`` processing strategy.
 
 *   Runs indefinitely (designed for systemd or
     supervisord).
-*   Uses ``dequeueForWorker()`` with atomic locking
+*   Uses ``dequeueForWorker()`` with a database-portable
+    compare-and-swap claim
     to prevent multiple workers from processing the
     same conversation.
 *   Each worker identifies itself with a unique ID
