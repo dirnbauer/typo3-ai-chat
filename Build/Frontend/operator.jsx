@@ -174,7 +174,7 @@ function mapInitialMessages(messages) {
             role: message.role,
             content: [{type: 'text', text: messageText(message)}],
             createdAt: message.createdAt ? new Date(message.createdAt) : new Date(),
-            status: {type: 'complete', reason: 'stop'},
+            ...(message.role === 'assistant' ? {status: {type: 'complete', reason: 'stop'}} : {}),
             metadata: {
                 custom: {
                     storedAttachments: storedAttachments(message),
