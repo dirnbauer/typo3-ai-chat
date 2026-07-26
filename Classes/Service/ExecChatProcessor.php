@@ -18,7 +18,7 @@ final readonly class ExecChatProcessor implements ChatProcessorInterface
         $phpBin = $this->resolvePhpCliBinary();
 
         $cmd = sprintf(
-            '%s %s ai-chat:process %d >> %s 2>&1 &',
+            '%s %s webconsulting-ai-chat:process %d >> %s 2>&1 &',
             escapeshellarg($phpBin),
             escapeshellarg($typo3Bin),
             $conversationUid,

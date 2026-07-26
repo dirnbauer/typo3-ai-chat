@@ -17,7 +17,7 @@ use Webconsulting\Typo3AiChat\Service\ChatService;
 use Webconsulting\Typo3AiChat\Utility\BackendUserInitializer;
 use Webconsulting\Typo3AiChat\Utility\ErrorMessageSanitizer;
 
-#[AsCommand(name: 'ai-chat:process', description: 'Process a single chat conversation')]
+#[AsCommand(name: 'webconsulting-ai-chat:process', description: 'Process a single chat conversation')]
 final class ProcessChatCommand extends Command
 {
     public function __construct(

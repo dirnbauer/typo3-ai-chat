@@ -41,4 +41,4 @@ Fix style and analysis issues in the same commit as the code change.
 
 ## Reporting issues
 
-Use [GitHub Issues](https://github.com/webconsulting/typo3-ai-chat/issues).
+Use [GitHub Issues](https://github.com/dirnbauer/typo3-ai-chat/issues).

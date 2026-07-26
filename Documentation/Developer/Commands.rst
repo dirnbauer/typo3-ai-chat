@@ -7,7 +7,7 @@ Console commands
 The extension provides three Symfony console commands
 for background processing and maintenance.
 
-ai-chat:process
+webconsulting-ai-chat:process
 ================
 
 Process a single chat conversation. Used by the ``exec``
@@ -16,7 +16,7 @@ this command for each incoming message.
 
 ..  code-block:: bash
 
-    vendor/bin/typo3 ai-chat:process <conversationUid>
+    vendor/bin/typo3 webconsulting-ai-chat:process <conversationUid>
 
 **Arguments:**
 
@@ -45,7 +45,7 @@ this command for each incoming message.
 *   Otherwise, runs the full agent loop via
     ``processConversation()``.
 
-ai-chat:worker
+webconsulting-ai-chat:worker
 ==============
 
 Long-running worker process that polls for conversations
@@ -54,7 +54,7 @@ Used by the ``worker`` processing strategy.
 
 ..  code-block:: bash
 
-    vendor/bin/typo3 ai-chat:worker [--poll-interval=200]
+    vendor/bin/typo3 webconsulting-ai-chat:worker [--poll-interval=200]
 
 **Options:**
 
@@ -79,7 +79,7 @@ Used by the ``worker`` processing strategy.
 See :ref:`worker-mode-production-setup` in the
 Configuration section for a systemd service example.
 
-ai-chat:cleanup
+webconsulting-ai-chat:cleanup
 ===============
 
 Maintenance command that handles stuck conversations,
@@ -88,7 +88,7 @@ run periodically (e.g. daily via cron).
 
 ..  code-block:: bash
 
-    vendor/bin/typo3 ai-chat:cleanup \
+    vendor/bin/typo3 webconsulting-ai-chat:cleanup \
         [--delete-after-days=90]
 
 **Options:**

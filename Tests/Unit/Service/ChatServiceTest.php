@@ -243,7 +243,7 @@ class ChatServiceTest extends TestCase
         $service->processConversation($conversation);
 
         $system = $this->capturedSystemPrompt();
-        self::assertStringContainsString('TYPO3 Backend AI Chat by Netresearch', $system);
+        self::assertStringContainsString('TYPO3 AI Chat by Webconsulting', $system);
         self::assertStringContainsString('USE the appropriate tool', $system);
         self::assertStringContainsString('Never claim to be ChatGPT', $system);
     }
@@ -498,7 +498,7 @@ class ChatServiceTest extends TestCase
         $service->processConversation($conversation);
 
         $system = $this->capturedSystemPrompt();
-        self::assertStringContainsString('TYPO3 Backend AI Chat by Netresearch', $system);
+        self::assertStringContainsString('TYPO3 AI Chat by Webconsulting', $system);
         self::assertStringContainsString('You are a content editor.', $system);
     }
 
@@ -536,7 +536,7 @@ class ChatServiceTest extends TestCase
 
         $system = $this->capturedSystemPrompt();
         // Identity is always present; the conversation prompt replaces config/task prompts.
-        self::assertStringContainsString('TYPO3 Backend AI Chat by Netresearch', $system);
+        self::assertStringContainsString('TYPO3 AI Chat by Webconsulting', $system);
         self::assertStringContainsString('Only custom instructions', $system);
         self::assertStringNotContainsString('This should be ignored.', $system);
         self::assertStringNotContainsString('This too.', $system);

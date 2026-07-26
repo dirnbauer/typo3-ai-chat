@@ -35,9 +35,10 @@ Decision
 
 Process messages via CLI commands, dispatched by the web server:
 
--   **``exec`` mode**: The web request forks a ``ai-chat:process <messageUid>``
+-   **``exec`` mode**: The web request forks a
+    ``webconsulting-ai-chat:process <messageUid>``
     subprocess per message and returns immediately.
--   **``worker`` mode**: A long-running ``ai-chat:worker`` process polls for
+-   **``worker`` mode**: A long-running ``webconsulting-ai-chat:worker`` process polls for
     pending messages. Suitable for environments where forking per request is
     undesirable.
 

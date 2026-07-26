@@ -160,7 +160,7 @@ class ProcessChatCommandTest extends TestCase
         self::assertCount(1, $attributes);
 
         $instance = $attributes[0]->newInstance();
-        self::assertSame('ai-chat:process', $instance->name);
+        self::assertSame('webconsulting-ai-chat:process', $instance->name);
         self::assertSame('Process a single chat conversation', $instance->description);
     }
 

@@ -12,11 +12,23 @@ or open **Tools > TYPO3 AI Chat** for the full operator console. Both surfaces
 use the same conversations, attachments, approvals and execution ledger. The
 drawer's expand button opens the full module when more room is useful.
 
+..  figure:: /Images/InlineDrawer.png
+    :alt: TYPO3 AI Chat inline drawer opened from the top-right toolbar
+
+    The inline drawer keeps chat, lane selection, attachments, and execution
+    status available over the current backend module.
+
 The full interface has three working areas:
 
 * the dark conversation rail on the left;
 * the assistant-ui thread and attachment composer in the centre;
 * the execution ledger on the right.
+
+..  figure:: /Images/OperatorConsole.png
+    :alt: Full TYPO3 AI Chat operator console with execution ledger
+
+    The full Tools module combines conversation history, the assistant thread,
+    and a persistent execution ledger.
 
 The ledger is the important difference from a normal chat. It records the tools
 the agent used, their arguments, their returned result, and failures. A write or
@@ -86,7 +98,7 @@ Keep the original extension installed until the replacement works:
 ..  code-block:: bash
 
     vendor/bin/typo3 extension:setup
-    vendor/bin/typo3 ai-chat:migrate-nr-mcp-agent
+    vendor/bin/typo3 webconsulting-ai-chat:migrate-nr-mcp-agent
 
 The command is idempotent, preserves target records and copies conversations and
 MCP server definitions. Only then remove ``netresearch/nr-mcp-agent``.

@@ -19,7 +19,7 @@ use TYPO3\CMS\Core\Database\ConnectionPool;
  * run the migration repeatedly, and only then uninstall nr_mcp_agent.
  */
 #[AsCommand(
-    name: 'ai-chat:migrate-nr-mcp-agent',
+    name: 'webconsulting-ai-chat:migrate-nr-mcp-agent',
     description: 'Migrate conversations and MCP server records from Netresearch nr-mcp-agent.',
 )]
 final class MigrateNrMcpAgentCommand extends Command

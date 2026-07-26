@@ -23,7 +23,7 @@ LLM and processing
     :default: exec
 
     ``exec`` starts a bounded CLI process per turn. ``worker`` uses the
-    long-running ``ai-chat:worker`` command.
+    long-running ``webconsulting-ai-chat:worker`` command.
 
 ..  confval:: enableMcp
     :type: boolean
@@ -82,7 +82,8 @@ Access and limits
     :type: int
     :default: 30
 
-    Age after which unpinned conversations are archived by ``ai-chat:cleanup``.
+    Age after which unpinned conversations are archived by
+    ``webconsulting-ai-chat:cleanup``.
 
 Attachment security
 ===================

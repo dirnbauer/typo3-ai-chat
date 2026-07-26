@@ -77,7 +77,7 @@ CLI processing over HTTP
 ------------------------
 
 Message processing happens in CLI context
-(``ai-chat:process`` or ``ai-chat:worker``), not in the
+(``webconsulting-ai-chat:process`` or ``webconsulting-ai-chat:worker``), not in the
 web request. This design:
 
 *   Avoids PHP timeout issues -- the LLM calls and tool
@@ -97,7 +97,7 @@ The system is designed to handle crashes gracefully:
 *   If a CLI process crashes mid-conversation, the
     conversation remains in ``processing``, ``locked``,
     or ``tool_loop`` status.
-*   The ``ai-chat:cleanup`` command detects conversations
+*   The ``webconsulting-ai-chat:cleanup`` command detects conversations
     stuck for more than 5 minutes and marks them as
     ``failed``.
 *   Users see a clear error message and can retry.
@@ -158,8 +158,8 @@ System prompt priority
 The system prompt is composed in this order:
 
 1.  **Identity / behaviour contract** -- Always prepended. A
-    fixed block establishes that the assistant is the
-    Netresearch TYPO3 Backend AI Chat, steers it to use its
+    fixed block establishes that the assistant is TYPO3 AI
+    Chat by Webconsulting, credits Netresearch's open foundation, steers it to use its
     tools instead of asking the user to paste data, forbids
     it from claiming to be ChatGPT/OpenAI, and tells it to
     answer in the user's language. This holds regardless of
@@ -245,7 +245,7 @@ File attachment flow
 
     User selects file (upload or FAL browser)
         |
-        | POST /ai-chat/file-upload (multipart/form-data)
+        | POST /webconsulting/ai-chat/file-upload (multipart/form-data)
         v
     ChatApiController::fileUpload()
         | validates MIME type + size (max 20 MB)
@@ -257,7 +257,7 @@ File attachment flow
 
     User sends message
         |
-        | POST /ai-chat/conversations/send {content, fileUid}
+        | POST /webconsulting/ai-chat/conversations/send {content, fileUids}
         v
     ChatApiController::sendMessage()
         | validates file limit (max 5 per conversation)
@@ -283,7 +283,8 @@ File attachment flow
 its supported formats. It calls ``VisionCapableInterface::getSupportedImageFormats()``
 for image formats and, if the provider also implements
 ``DocumentCapableInterface``, appends ``getSupportedDocumentFormats()``
-(e.g. ``['pdf']``). The frontend receives this list via ``GET /ai-chat/status``
+(e.g. ``['pdf']``). The frontend receives this list via
+``GET /webconsulting/ai-chat/status``
 and uses it to set the file picker's ``accept`` attribute dynamically —
 ensuring users can only select file types the current provider can process.
 
@@ -313,7 +314,8 @@ Component map
      - Persists messages, pins, auto-archive
      - ``Classes/Domain/Repository/``
    * - **CLI Commands**
-     - ``ai-chat:process`` (exec), ``ai-chat:worker`` (long-running)
+     - ``webconsulting-ai-chat:process`` (exec),
+       ``webconsulting-ai-chat:worker`` (long-running)
      - ``Classes/Command/``
    * - **Access Control**
      - Group-based access, concurrency caps, length limits

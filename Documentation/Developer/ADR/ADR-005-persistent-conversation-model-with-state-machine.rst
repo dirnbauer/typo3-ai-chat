@@ -50,7 +50,7 @@ Consequences
 -   The browser polls the message status via a lightweight AJAX endpoint (see
     :ref:`adr-007`).
 -   CAS updates prevent double-processing in ``worker`` mode.
--   Auto-archive and cleanup commands (``ai-chat:cleanup``) keep the table size
+-   Auto-archive and cleanup commands (``webconsulting-ai-chat:cleanup``) keep the table size
     bounded.
 -   Per-user concurrency caps (``maxActiveConversationsPerUser``) are enforceable
     via database queries.

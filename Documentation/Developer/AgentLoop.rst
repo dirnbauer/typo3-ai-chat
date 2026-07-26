@@ -56,7 +56,8 @@ Synchronous execution and resume
 
 ``AgentRuntime::run()`` is synchronous and drives the entire tool loop in
 one call, so a turn never leaves persisted "pending tool calls" in the
-conversation. The CLI worker (``ai-chat:process`` / ``ai-chat:worker``)
+conversation. The CLI worker (``webconsulting-ai-chat:process`` /
+``webconsulting-ai-chat:worker``)
 therefore always calls ``processConversation()``.
 ``resumeConversation()`` re-runs the turn over the existing transcript
 for a resumable conversation (``processing``, ``tool_loop`` or

@@ -10,7 +10,7 @@ Requirements
 *   TYPO3 v13.4+ or v14.x
 *   PHP 8.2+
 *   `netresearch/nr-llm <https://github.com/netresearch/
-    t3x-nr-llm>`__ (^0.22) -- LLM abstraction layer
+    t3x-nr-llm>`__ (^0.25) -- LLM abstraction layer
 
 Optional:
 
@@ -32,7 +32,8 @@ Quick start
     to the Task UID from step 2.
 
 The AI Chat module is now available under
-**Admin Tools > AI Chat**.
+**Tools > TYPO3 AI Chat**. The same chat is also available from the top-right
+toolbar button.
 
 Composer installation
 =====================
@@ -71,7 +72,7 @@ development:
 
 ..  code-block:: bash
 
-    git clone https://github.com/webconsulting/typo3-ai-chat.git
+    git clone https://github.com/dirnbauer/typo3-ai-chat.git
     cd typo3-ai-chat
     ddev start
     ddev composer install

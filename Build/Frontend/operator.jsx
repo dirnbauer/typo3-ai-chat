@@ -8,7 +8,7 @@ import {
     ThreadPrimitive,
     useLocalRuntime,
     useMessage,
-    useMessagePart,
+    useMessagePartText,
 } from '@assistant-ui/react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -93,53 +93,53 @@ class Typo3Api {
     }
 
     status() {
-        return this.get('ai_chat_status');
+        return this.get('webconsulting_ai_chat_status');
     }
 
     conversations() {
-        return this.get('ai_chat_conversations');
+        return this.get('webconsulting_ai_chat_conversations');
     }
 
     createConversation() {
-        return this.post('ai_chat_conversation_create', {});
+        return this.post('webconsulting_ai_chat_conversation_create', {});
     }
 
     messages(conversationUid, after = 0) {
-        return this.get('ai_chat_conversation_messages', {conversationUid, after});
+        return this.get('webconsulting_ai_chat_conversation_messages', {conversationUid, after});
     }
 
     sendMessage(conversationUid, content, fileUids) {
-        return this.post('ai_chat_conversation_send', {conversationUid, content, fileUids});
+        return this.post('webconsulting_ai_chat_conversation_send', {conversationUid, content, fileUids});
     }
 
     approve(conversationUid, approved) {
-        return this.post('ai_chat_conversation_approval', {conversationUid, approved});
+        return this.post('webconsulting_ai_chat_conversation_approval', {conversationUid, approved});
     }
 
     triggerFlue(conversationUid, content, pageUid) {
-        return this.post('ai_chat_flue_trigger', {conversationUid, content, pageUid});
+        return this.post('webconsulting_ai_chat_flue_trigger', {conversationUid, content, pageUid});
     }
 
     flueStatus(conversationUid) {
-        return this.get('ai_chat_flue_status', {conversationUid});
+        return this.get('webconsulting_ai_chat_flue_status', {conversationUid});
     }
 
     archive(conversationUid) {
-        return this.post('ai_chat_conversation_archive', {conversationUid});
+        return this.post('webconsulting_ai_chat_conversation_archive', {conversationUid});
     }
 
     pin(conversationUid) {
-        return this.post('ai_chat_conversation_pin', {conversationUid});
+        return this.post('webconsulting_ai_chat_conversation_pin', {conversationUid});
     }
 
     rename(conversationUid, title) {
-        return this.post('ai_chat_conversation_rename', {conversationUid, title});
+        return this.post('webconsulting_ai_chat_conversation_rename', {conversationUid, title});
     }
 
     async upload(file) {
         const form = new FormData();
         form.append('file', file);
-        return this.request('ai_chat_file_upload', {method: 'POST', body: form});
+        return this.request('webconsulting_ai_chat_file_upload', {method: 'POST', body: form});
     }
 }
 
@@ -275,10 +275,10 @@ function AttachmentPreview({attachment, removable = false}) {
 }
 
 function MarkdownPart() {
-    const part = useMessagePart();
+    const part = useMessagePartText();
     return (
         <div className="wc-markdown">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{part?.type === 'text' ? part.text : ''}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{part.text}</ReactMarkdown>
         </div>
     );
 }
@@ -336,9 +336,11 @@ function Composer({available, maxLength}) {
                         disabled={!available}
                         rows={1}
                     />
-                    <ComposerPrimitive.Cancel className="wc-send-button is-cancel" aria-label="Stop">
-                        <Square size={15} fill="currentColor" />
-                    </ComposerPrimitive.Cancel>
+                    <ThreadPrimitive.If running>
+                        <ComposerPrimitive.Cancel className="wc-send-button is-cancel" aria-label="Stop">
+                            <Square size={15} fill="currentColor" />
+                        </ComposerPrimitive.Cancel>
+                    </ThreadPrimitive.If>
                     <ComposerPrimitive.Send className="wc-send-button" aria-label="Send">
                         <Send size={17} />
                     </ComposerPrimitive.Send>

@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integrated AI chat module in the TYPO3 backend (Admin Tools > AI Chat)
 - Floating chat panel in the backend toolbar, persistent across module navigation
 - Conversation history with resume, pin, and auto-archive support
-- Background processing via CLI commands (`ai-chat:process`, `ai-chat:worker`)
+- Background processing via CLI commands (`webconsulting-ai-chat:process`, `webconsulting-ai-chat:worker`)
 - MCP (Model Context Protocol) integration for TYPO3 content management tools
 - File/image upload support with per-provider capability detection (PNG, JPEG, WebP)
 - PDF attachment support for providers implementing `DocumentCapableInterface` (Claude, Gemini); file picker accept filter is set dynamically per provider

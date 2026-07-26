@@ -23,7 +23,7 @@ Added
 
 - AI chat panel in the TYPO3 backend powered by ``netresearch/nr-llm``.
 - Persistent conversation management: create, list, archive, pin conversations.
-- Asynchronous processing via ``ai-chat:worker`` CLI command with
+- Asynchronous processing via ``webconsulting-ai-chat:worker`` CLI command with
   atomic compare-and-swap queue dequeue.
 - MCP (Model Context Protocol) integration via ``hn/typo3-mcp-server``:
   agent loop with tool call execution and resume support.

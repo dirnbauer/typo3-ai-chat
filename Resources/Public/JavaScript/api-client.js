@@ -15,17 +15,17 @@ export class ApiClient {
 
     /** @returns {Promise<{available: boolean, mcpEnabled: boolean, issues: string[], visionSupported: boolean, maxFileSize: number, supportedFormats: string[]}>} */
     async getStatus() {
-        return this._get('ai_chat_status');
+        return this._get('webconsulting_ai_chat_status');
     }
 
     /** @returns {Promise<{conversations: Array}>} */
     async listConversations() {
-        return this._get('ai_chat_conversations');
+        return this._get('webconsulting_ai_chat_conversations');
     }
 
     /** @returns {Promise<{uid: number}>} */
     async createConversation() {
-        return this._post('ai_chat_conversation_create', {});
+        return this._post('webconsulting_ai_chat_conversation_create', {});
     }
 
     /**
@@ -34,7 +34,7 @@ export class ApiClient {
      * @returns {Promise<{status: string, messages: Array, totalCount: number, errorMessage: string}>}
      */
     async getMessages(conversationUid, after = 0) {
-        return this._get('ai_chat_conversation_messages', {conversationUid, after});
+        return this._get('webconsulting_ai_chat_conversation_messages', {conversationUid, after});
     }
 
     /**
@@ -48,7 +48,7 @@ export class ApiClient {
         if (fileUid !== null) {
             body.fileUid = fileUid;
         }
-        return this._post('ai_chat_conversation_send', body);
+        return this._post('webconsulting_ai_chat_conversation_send', body);
     }
 
     /**
@@ -58,7 +58,7 @@ export class ApiClient {
     async uploadFile(file) {
         const formData = new FormData();
         formData.append('file', file);
-        return this._postFormData('ai_chat_file_upload', formData);
+        return this._postFormData('webconsulting_ai_chat_file_upload', formData);
     }
 
     /**
@@ -66,7 +66,7 @@ export class ApiClient {
      * @returns {Promise<{fileUid: number, name: string, mimeType: string, size: number}>}
      */
     async getFileInfo(fileUid) {
-        return this._get('ai_chat_file_info', {fileUid});
+        return this._get('webconsulting_ai_chat_file_info', {fileUid});
     }
 
     /**
@@ -74,7 +74,7 @@ export class ApiClient {
      * @returns {Promise<{status: string}>}
      */
     async resumeConversation(conversationUid) {
-        return this._post('ai_chat_conversation_resume', {conversationUid});
+        return this._post('webconsulting_ai_chat_conversation_resume', {conversationUid});
     }
 
     /**
@@ -82,7 +82,7 @@ export class ApiClient {
      * @returns {Promise<{status: string}>}
      */
     async archiveConversation(conversationUid) {
-        return this._post('ai_chat_conversation_archive', {conversationUid});
+        return this._post('webconsulting_ai_chat_conversation_archive', {conversationUid});
     }
 
     /**
@@ -91,7 +91,7 @@ export class ApiClient {
      * @returns {Promise<{title: string}>}
      */
     async renameConversation(conversationUid, title) {
-        return this._post('ai_chat_conversation_rename', {conversationUid, title});
+        return this._post('webconsulting_ai_chat_conversation_rename', {conversationUid, title});
     }
 
     /**
@@ -99,7 +99,7 @@ export class ApiClient {
      * @returns {Promise<{pinned: boolean}>}
      */
     async togglePin(conversationUid) {
-        return this._post('ai_chat_conversation_pin', {conversationUid});
+        return this._post('webconsulting_ai_chat_conversation_pin', {conversationUid});
     }
 
     /**

@@ -17,7 +17,7 @@ use Webconsulting\Typo3AiChat\Service\ChatService;
 use Webconsulting\Typo3AiChat\Utility\BackendUserInitializer;
 use Webconsulting\Typo3AiChat\Utility\ErrorMessageSanitizer;
 
-#[AsCommand(name: 'ai-chat:worker', description: 'Long-running worker that processes chat conversations from queue')]
+#[AsCommand(name: 'webconsulting-ai-chat:worker', description: 'Long-running worker that processes chat conversations from queue')]
 final class ChatWorkerCommand extends Command
 {
     public function __construct(

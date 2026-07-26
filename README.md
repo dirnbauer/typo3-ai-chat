@@ -36,6 +36,13 @@ Git history is retained in this repository and the detailed attribution is in
 - **Safe migration** — an idempotent command copies conversations and MCP server
   records from nr-mcp-agent before the old extension is removed.
 
+![Full TYPO3 AI Chat operator console](Documentation/Images/OperatorConsole.png)
+
+The compact toolbar surface keeps the same conversations and governed execution
+controls available without leaving the current TYPO3 module:
+
+![Inline TYPO3 AI Chat drawer](Documentation/Images/InlineDrawer.png)
+
 ## Architecture
 
 ```text
@@ -94,7 +101,7 @@ Keep both extensions installed during verification:
 
 ```bash
 vendor/bin/typo3 extension:setup
-vendor/bin/typo3 ai-chat:migrate-nr-mcp-agent
+vendor/bin/typo3 webconsulting-ai-chat:migrate-nr-mcp-agent
 ```
 
 The migration command:

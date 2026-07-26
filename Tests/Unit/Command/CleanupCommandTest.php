@@ -29,7 +29,7 @@ class CleanupCommandTest extends TestCase
         self::assertCount(1, $attributes);
 
         $instance = $attributes[0]->newInstance();
-        self::assertSame('ai-chat:cleanup', $instance->name);
+        self::assertSame('webconsulting-ai-chat:cleanup', $instance->name);
         self::assertSame('Clean up stuck, inactive and archived conversations', $instance->description);
     }
 

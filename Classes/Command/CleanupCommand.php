@@ -13,7 +13,7 @@ use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use Webconsulting\Typo3AiChat\Configuration\ExtensionConfiguration;
 
-#[AsCommand(name: 'ai-chat:cleanup', description: 'Clean up stuck, inactive and archived conversations')]
+#[AsCommand(name: 'webconsulting-ai-chat:cleanup', description: 'Clean up stuck, inactive and archived conversations')]
 final class CleanupCommand extends Command
 {
     private const TABLE = 'tx_webconsultingaichat_conversation';

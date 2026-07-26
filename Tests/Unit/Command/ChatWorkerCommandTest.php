@@ -36,7 +36,7 @@ class ChatWorkerCommandTest extends TestCase
         self::assertCount(1, $attributes);
 
         $instance = $attributes[0]->newInstance();
-        self::assertSame('ai-chat:worker', $instance->name);
+        self::assertSame('webconsulting-ai-chat:worker', $instance->name);
         self::assertSame('Long-running worker that processes chat conversations from queue', $instance->description);
     }
 

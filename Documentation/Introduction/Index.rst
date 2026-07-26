@@ -13,7 +13,7 @@ Introduction
     browser-side agents, and custom integrations are far from settled. The
     goal here is to show that it *works*, and to invite feedback from
     anyone thinking about the same problem. If you have thoughts,
-    `open an issue <https://github.com/webconsulting/typo3-ai-chat/issues>`__.
+    `open an issue <https://github.com/dirnbauer/typo3-ai-chat/issues>`__.
 
 What does it do?
 ================
