@@ -397,7 +397,7 @@ export class ChatCoreController {
         }
 
         // A unique fieldName lets us identify our postMessage response (TYPO3 13/14 both use postMessage)
-        const fieldName = 'nr_mcp_agent_fal_picker';
+        const fieldName = 'webconsulting_ai_chat_fal_picker';
         const extensions = this.supportedFormats.join(',');
         // bparams format: fieldName|irreConfig|allowedTables|allowedExtensions
         const bparams = encodeURIComponent(fieldName + '|||' + extensions);

@@ -2,9 +2,8 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Tests\Unit\Utility;
+namespace Webconsulting\Typo3AiChat\Tests\Unit\Utility;
 
-use Netresearch\NrMcpAgent\Utility\BackendUserInitializer;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -13,6 +12,7 @@ use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\Expression\ExpressionBuilder;
 use TYPO3\CMS\Core\Database\Query\QueryBuilder;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use Webconsulting\Typo3AiChat\Utility\BackendUserInitializer;
 
 class BackendUserInitializerTest extends TestCase
 {

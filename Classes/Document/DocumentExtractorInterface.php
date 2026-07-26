@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Document;
+namespace Webconsulting\Typo3AiChat\Document;
 
 use RuntimeException;
 

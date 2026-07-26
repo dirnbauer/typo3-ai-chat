@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Tests\Unit\Domain\Repository;
+namespace Webconsulting\Typo3AiChat\Tests\Unit\Domain\Repository;
 
-use Netresearch\NrMcpAgent\Domain\Repository\McpServerRepository;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\Expression\ExpressionBuilder;
 use TYPO3\CMS\Core\Database\Query\QueryBuilder;
+use Webconsulting\Typo3AiChat\Domain\Repository\McpServerRepository;
 
 class McpServerRepositoryTest extends TestCase
 {
@@ -81,7 +81,7 @@ class McpServerRepositoryTest extends TestCase
         $connection->expects(self::once())
             ->method('insert')
             ->with(
-                'tx_nrmcpagent_mcp_server',
+                'tx_webconsultingaichat_mcp_server',
                 self::callback(static function (array $data): bool {
                     return $data['server_key'] === 'typo3'
                         && $data['transport'] === 'stdio'
@@ -104,7 +104,7 @@ class McpServerRepositoryTest extends TestCase
         $connection->expects(self::once())
             ->method('update')
             ->with(
-                'tx_nrmcpagent_mcp_server',
+                'tx_webconsultingaichat_mcp_server',
                 self::callback(static function (array $data): bool {
                     return $data['connection_status'] === 'ok'
                         && $data['connection_error'] === ''
@@ -128,7 +128,7 @@ class McpServerRepositoryTest extends TestCase
         $connection->expects(self::once())
             ->method('update')
             ->with(
-                'tx_nrmcpagent_mcp_server',
+                'tx_webconsultingaichat_mcp_server',
                 self::callback(static function (array $data): bool {
                     return $data['connection_status'] === 'error'
                         && $data['connection_error'] === 'Connection refused';

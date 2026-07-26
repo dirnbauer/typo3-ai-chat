@@ -27,10 +27,10 @@ parameters:
 
 services:
     -
-        class: Netresearch\NrMcpAgent\Tests\Architecture\LayerDependencyTest
+        class: Webconsulting\Typo3AiChat\Tests\Architecture\LayerDependencyTest
         tags:
             - phpat.test
     -
-        class: Netresearch\NrMcpAgent\Tests\Architecture\DocumentExtractorArchitectureTest
+        class: Webconsulting\Typo3AiChat\Tests\Architecture\DocumentExtractorArchitectureTest
         tags:
             - phpat.test

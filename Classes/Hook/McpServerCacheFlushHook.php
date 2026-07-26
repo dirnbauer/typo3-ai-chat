@@ -2,9 +2,8 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Hook;
+namespace Webconsulting\Typo3AiChat\Hook;
 
-use Netresearch\NrMcpAgent\Checker\McpConnectionChecker;
 use Throwable;
 use TYPO3\CMS\Core\Cache\CacheManager;
 use TYPO3\CMS\Core\Cache\Frontend\FrontendInterface;
@@ -14,6 +13,7 @@ use TYPO3\CMS\Core\Messaging\FlashMessage;
 use TYPO3\CMS\Core\Messaging\FlashMessageService;
 use TYPO3\CMS\Core\Type\ContextualFeedbackSeverity;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use Webconsulting\Typo3AiChat\Checker\McpConnectionChecker;
 
 /**
  * Flushes the MCP tool cache and verifies the connection when an MCP server record is saved.
@@ -25,7 +25,7 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
  */
 final class McpServerCacheFlushHook
 {
-    private const TABLE = 'tx_nrmcpagent_mcp_server';
+    private const TABLE = 'tx_webconsultingaichat_mcp_server';
 
     /**
      * @param string $status 'new' or 'update'
@@ -46,7 +46,7 @@ final class McpServerCacheFlushHook
         // and avoids complexity of resolving the exact cache key (which requires the full row).
         try {
             $cacheManager = GeneralUtility::makeInstance(CacheManager::class);
-            $cache = $cacheManager->getCache('nr_mcp_agent_tools');
+            $cache = $cacheManager->getCache('webconsulting_ai_chat_tools');
             if ($cache instanceof FrontendInterface) {
                 $cache->flush();
             }

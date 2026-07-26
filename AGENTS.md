@@ -1,4 +1,4 @@
-# nr-mcp-agent
+# typo3-ai-chat
 
 <!-- Last Updated: 2026-03-24 -->
 

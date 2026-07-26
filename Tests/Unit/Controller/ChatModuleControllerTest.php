@@ -2,10 +2,8 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Tests\Unit\Controller;
+namespace Webconsulting\Typo3AiChat\Tests\Unit\Controller;
 
-use Netresearch\NrMcpAgent\Configuration\ExtensionConfiguration;
-use Netresearch\NrMcpAgent\Controller\ChatModuleController;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\ResponseInterface;
@@ -14,6 +12,8 @@ use ReflectionClass;
 use ReflectionParameter;
 use TYPO3\CMS\Backend\Template\ModuleTemplateFactory;
 use TYPO3\CMS\Core\Page\PageRenderer;
+use Webconsulting\Typo3AiChat\Configuration\ExtensionConfiguration;
+use Webconsulting\Typo3AiChat\Controller\ChatModuleController;
 
 /**
  * ChatModuleController relies on ModuleTemplateFactory + ModuleTemplate,

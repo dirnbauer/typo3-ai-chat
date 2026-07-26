@@ -5,5 +5,5 @@
 
 set -euo pipefail
 
-cp /var/www/nr_mcp_agent/.ddev/web-build/landing-index.html /var/www/html/index.html
+cp /var/www/webconsulting_ai_chat/.ddev/web-build/landing-index.html /var/www/html/index.html
 echo "Landing page copied to /var/www/html/index.html"

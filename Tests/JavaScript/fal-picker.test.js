@@ -152,7 +152,7 @@ describe('_openFalPicker', () => {
             origin: globalThis.location.origin,
             data: {
                 actionName: 'typo3:elementBrowser:elementAdded',
-                fieldName: 'nr_mcp_agent_fal_picker',
+                fieldName: 'webconsulting_ai_chat_fal_picker',
                 value: '42',
                 label: 'doc.pdf',
             },
@@ -178,7 +178,7 @@ describe('_openFalPicker', () => {
             origin: globalThis.location.origin,
             data: {
                 actionName: 'typo3:elementBrowser:elementAdded',
-                fieldName: 'nr_mcp_agent_fal_picker',
+                fieldName: 'webconsulting_ai_chat_fal_picker',
                 value: 'sys_file_42',
                 label: 'doc.pdf',
             },
@@ -224,7 +224,7 @@ describe('_openFalPicker', () => {
             origin: globalThis.location.origin,
             data: {
                 actionName: 'typo3:elementBrowser:elementAdded',
-                fieldName: 'nr_mcp_agent_fal_picker',
+                fieldName: 'webconsulting_ai_chat_fal_picker',
                 value: '',
             },
         });
@@ -243,7 +243,7 @@ describe('_openFalPicker', () => {
 
         const eventData = {
             actionName: 'typo3:elementBrowser:elementAdded',
-            fieldName: 'nr_mcp_agent_fal_picker',
+            fieldName: 'webconsulting_ai_chat_fal_picker',
             value: '42',
         };
 

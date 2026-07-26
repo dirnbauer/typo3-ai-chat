@@ -18,7 +18,7 @@ System overview
         | enqueue message
         v
     ConversationRepository  <----->  Database
-        |                         (tx_nrmcpagent_conversation)
+        |                         (tx_webconsultingaichat_conversation)
         |
         v
     ChatProcessor (exec or worker)
@@ -109,7 +109,7 @@ Conversation
 ------------
 
 The central entity. Stored in
-``tx_nrmcpagent_conversation``.
+``tx_webconsultingaichat_conversation``.
 
 **Fields:**
 

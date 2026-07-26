@@ -2,9 +2,8 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Tests\Functional\Controller;
+namespace Webconsulting\Typo3AiChat\Tests\Functional\Controller;
 
-use Netresearch\NrMcpAgent\Controller\ChatModuleController;
 use PHPUnit\Framework\Attributes\Test;
 use TYPO3\CMS\Backend\Module\ModuleProvider;
 use TYPO3\CMS\Backend\Routing\Route;
@@ -13,13 +12,14 @@ use TYPO3\CMS\Core\Http\NormalizedParams;
 use TYPO3\CMS\Core\Http\ServerRequest;
 use TYPO3\CMS\Core\Localization\LanguageServiceFactory;
 use TYPO3\TestingFramework\Core\Functional\FunctionalTestCase;
+use Webconsulting\Typo3AiChat\Controller\ChatModuleController;
 
 class ChatModuleControllerTest extends FunctionalTestCase
 {
     protected array $testExtensionsToLoad = [
         'netresearch/nr-vault',
         'netresearch/nr-llm',
-        'netresearch/nr-mcp-agent',
+        'webconsulting/typo3-ai-chat',
     ];
 
     protected function setUp(): void
@@ -41,15 +41,15 @@ class ChatModuleControllerTest extends FunctionalTestCase
     public function moduleIsRegistered(): void
     {
         $moduleProvider = $this->get(ModuleProvider::class);
-        $module = $moduleProvider->getModule('nr_mcp_agent_chat');
-        self::assertNotNull($module, 'Module nr_mcp_agent_chat must be registered');
+        $module = $moduleProvider->getModule('webconsulting_ai_chat_chat');
+        self::assertNotNull($module, 'Module webconsulting_ai_chat_chat must be registered');
     }
 
     #[Test]
     public function indexActionRendersResponseWithChatAppElement(): void
     {
         $moduleProvider = $this->get(ModuleProvider::class);
-        $module = $moduleProvider->getModule('nr_mcp_agent_chat');
+        $module = $moduleProvider->getModule('webconsulting_ai_chat_chat');
         self::assertNotNull($module);
 
         // Build a Route that carries the packageName option so BackendViewFactory
@@ -58,7 +58,7 @@ class ChatModuleControllerTest extends FunctionalTestCase
         $defaultOpts = $routeOptions['_default'] ?? [];
         $route = new Route('path', $defaultOpts);
 
-        $request = (new ServerRequest('https://localhost/typo3/module/tools/nr-mcp-agent-chat', 'GET'))
+        $request = (new ServerRequest('https://localhost/typo3/module/tools/typo3-ai-chat-chat', 'GET'))
             ->withAttribute('applicationType', SystemEnvironmentBuilder::REQUESTTYPE_BE)
             ->withAttribute('route', $route)
             ->withAttribute('module', $module)
@@ -72,7 +72,7 @@ class ChatModuleControllerTest extends FunctionalTestCase
         self::assertSame(200, $response->getStatusCode());
 
         $body = (string) $response->getBody();
-        self::assertStringContainsString('<nr-chat-app', $body);
+        self::assertStringContainsString('<wc-chat-app', $body);
         self::assertStringContainsString('data-max-length=', $body);
     }
 }

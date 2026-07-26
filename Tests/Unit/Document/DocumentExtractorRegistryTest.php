@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Tests\Unit\Document;
+namespace Webconsulting\Typo3AiChat\Tests\Unit\Document;
 
-use Netresearch\NrMcpAgent\Document\DocumentExtractorInterface;
-use Netresearch\NrMcpAgent\Document\DocumentExtractorRegistry;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use Webconsulting\Typo3AiChat\Document\DocumentExtractorInterface;
+use Webconsulting\Typo3AiChat\Document\DocumentExtractorRegistry;
 
 class DocumentExtractorRegistryTest extends TestCase
 {

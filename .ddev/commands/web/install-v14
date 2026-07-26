@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-## Description: Install TYPO3 v14 with nr_mcp_agent extension
+## Description: Install TYPO3 v14 with webconsulting_ai_chat extension
 ## Usage: install-v14
 ## Example: ddev install-v14
 
 set -euo pipefail
 
 INSTALL_DIR="/var/www/html/v14"
-EXTENSION_PATH="/var/www/nr_mcp_agent"
+EXTENSION_PATH="/var/www/webconsulting_ai_chat"
 
-echo "=== Installing TYPO3 v14 with nr_mcp_agent ==="
+echo "=== Installing TYPO3 v14 with webconsulting_ai_chat ==="
 
 # Drop and recreate database
 mysql -uroot -proot -hdb -e "DROP DATABASE IF EXISTS db_v14; CREATE DATABASE db_v14 CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
@@ -25,7 +25,7 @@ cd "$INSTALL_DIR"
 composer config --unset platform.php 2>/dev/null || true
 
 # Add extension as path repository
-composer config repositories.nr_mcp_agent path "$EXTENSION_PATH"
+composer config repositories.webconsulting_ai_chat path "$EXTENSION_PATH"
 
 # Add nr-vault as path repository if available locally
 if [ -d "/var/www/nr-vault" ]; then
@@ -34,7 +34,7 @@ if [ -d "/var/www/nr-vault" ]; then
 fi
 
 # Require the extension
-composer require "netresearch/nr-mcp-agent:@dev" --no-interaction
+composer require "webconsulting/typo3-ai-chat:@dev" --no-interaction
 
 # Require MCP server — TYPO3 14 needs the dev branch (no stable release yet for v14)
 composer config repositories.hn-mcp-server vcs https://github.com/hauptsacheNet/typo3-mcp-server.git
@@ -56,7 +56,7 @@ vendor/bin/typo3 setup \
     --admin-username="${TYPO3_SETUP_ADMIN_USERNAME:-admin}" \
     --admin-user-password="${TYPO3_SETUP_ADMIN_PASSWORD:-Joh316!!}" \
     --admin-email="${TYPO3_SETUP_ADMIN_EMAIL:-admin@example.com}" \
-    --project-name="nr-mcp-agent Dev" \
+    --project-name="typo3-ai-chat Dev" \
     --server-type=apache \
     --no-interaction \
     --force
@@ -77,11 +77,11 @@ $GLOBALS['TYPO3_CONF_VARS']['MAIL']['transport_smtp_server'] = 'localhost:1025';
 // AI Chat: nr-llm Task UID can be set here for dev
 // Create nr-llm Task record after install, then set the UID:
 if (getenv('NR_MCP_AGENT_LLM_TASK_UID')) {
-    $GLOBALS['TYPO3_CONF_VARS']['EXTENSIONS']['nr_mcp_agent']['llmTaskUid'] = (int)getenv('NR_MCP_AGENT_LLM_TASK_UID');
+    $GLOBALS['TYPO3_CONF_VARS']['EXTENSIONS']['webconsulting_ai_chat']['llmTaskUid'] = (int)getenv('NR_MCP_AGENT_LLM_TASK_UID');
 }
 
 // AI Chat: Enable MCP (typo3-mcp-server installed via composer)
-$GLOBALS['TYPO3_CONF_VARS']['EXTENSIONS']['nr_mcp_agent']['enableMcp'] = '1';
+$GLOBALS['TYPO3_CONF_VARS']['EXTENSIONS']['webconsulting_ai_chat']['enableMcp'] = '1';
 PHPSETTINGS
 
 # Run extension setup and flush caches
@@ -90,7 +90,7 @@ vendor/bin/typo3 cache:flush
 
 echo ""
 echo "=== Installation complete ==="
-echo "  Backend:  https://v14.nr-mcp-agent.ddev.site/typo3"
+echo "  Backend:  https://v14.typo3-ai-chat.ddev.site/typo3"
 echo "  Login:    ${TYPO3_SETUP_ADMIN_USERNAME:-admin} / ${TYPO3_SETUP_ADMIN_PASSWORD:-Joh316!!}"
-echo "  Docs:     https://docs.nr-mcp-agent.ddev.site"
+echo "  Docs:     https://docs.typo3-ai-chat.ddev.site"
 echo ""

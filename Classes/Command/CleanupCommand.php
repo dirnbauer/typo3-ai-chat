@@ -2,9 +2,8 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Command;
+namespace Webconsulting\Typo3AiChat\Command;
 
-use Netresearch\NrMcpAgent\Configuration\ExtensionConfiguration;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -12,11 +11,12 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
+use Webconsulting\Typo3AiChat\Configuration\ExtensionConfiguration;
 
 #[AsCommand(name: 'ai-chat:cleanup', description: 'Clean up stuck, inactive and archived conversations')]
 final class CleanupCommand extends Command
 {
-    private const TABLE = 'tx_nrmcpagent_conversation';
+    private const TABLE = 'tx_webconsultingaichat_conversation';
     private const STUCK_TIMEOUT_SECONDS = 300;
     private const DEFAULT_DELETE_AFTER_DAYS = 90;
 

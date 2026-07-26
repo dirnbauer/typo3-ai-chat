@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 #
-# TYPO3 Extension Test Runner - nr_mcp_agent
+# TYPO3 Extension Test Runner - webconsulting_ai_chat
 # Docker/podman-based test orchestration following TYPO3 core conventions.
 #
 # Reference: https://github.com/TYPO3BestPractices/tea
@@ -35,7 +35,7 @@ clean_cache_files() {
 
 load_help() {
     read -r -d '' HELP <<EOF
-nr_mcp_agent - TYPO3 Extension Test Runner
+webconsulting_ai_chat - TYPO3 Extension Test Runner
 Execute tests in Docker containers using TYPO3 core-testing images.
 
 Usage: $0 [options] [file]
@@ -163,7 +163,7 @@ IMAGE_ALPINE="${IMAGE_PREFIX}alpine:3.20"
 shift $((OPTIND - 1))
 
 SUFFIX="$(date +%s)-${RANDOM}"
-NETWORK="nr-mcp-agent-${SUFFIX}"
+NETWORK="typo3-ai-chat-${SUFFIX}"
 if ! ${CONTAINER_BIN} network create ${NETWORK} >/dev/null 2>&1; then
     echo "Failed to create container network '${NETWORK}'. Ensure ${CONTAINER_BIN} daemon is running." >&2
     exit 1

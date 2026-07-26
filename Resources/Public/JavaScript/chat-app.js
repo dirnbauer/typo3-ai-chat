@@ -7,7 +7,7 @@ import {themeStyles} from './theme.js';
 import {AVATAR_ASSISTANT, AVATAR_USER, ICON_PAPERCLIP, ICON_SEND, ICON_COMPOSE, ICON_CHEVRON_DOWN, ICON_UPLOAD} from './icons.js';
 
 /**
- * <nr-chat-app> – Main chat application component.
+ * <wc-chat-app> – Main chat application component.
  *
  * Renders a sidebar with conversation list and a main area with messages.
  * All chat business logic is delegated to ChatCoreController.
@@ -25,11 +25,11 @@ export class ChatApp extends LitElement {
             flex-direction: column;
             height: 100%;
             min-height: 400px;
-            border: 1px solid var(--nr-chat-border);
+            border: 1px solid var(--wc-chat-border);
             border-radius: 4px;
             overflow: hidden;
             font-family: var(--typo3-font-family, sans-serif);
-            background: var(--nr-chat-surface);
+            background: var(--wc-chat-surface);
         }
 
         .chat-body {
@@ -42,10 +42,10 @@ export class ChatApp extends LitElement {
         .sidebar {
             width: 280px;
             min-width: 280px;
-            border-right: 1px solid var(--nr-chat-border);
+            border-right: 1px solid var(--wc-chat-border);
             display: flex;
             flex-direction: column;
-            background: var(--nr-chat-surface-low);
+            background: var(--wc-chat-surface-low);
         }
         .sidebar.collapsed {
             width: 0;
@@ -58,7 +58,7 @@ export class ChatApp extends LitElement {
             align-items: center;
             justify-content: space-between;
             padding: 12px;
-            border-bottom: 1px solid var(--nr-chat-border);
+            border-bottom: 1px solid var(--wc-chat-border);
         }
         .sidebar-header h3 {
             margin: 0;
@@ -75,19 +75,19 @@ export class ChatApp extends LitElement {
             gap: 8px;
             padding: 10px 12px;
             cursor: pointer;
-            border-bottom: 1px solid var(--nr-chat-border);
+            border-bottom: 1px solid var(--wc-chat-border);
             transition: background 0.15s;
         }
         .conversation-item:hover,
         .conversation-item:focus-visible {
-            background: var(--nr-chat-hover);
+            background: var(--wc-chat-hover);
         }
         .conversation-item:focus-visible {
-            outline: 2px solid var(--nr-chat-focus-ring);
+            outline: 2px solid var(--wc-chat-focus-ring);
             outline-offset: -2px;
         }
         .conversation-item.active {
-            background: var(--nr-chat-active);
+            background: var(--wc-chat-active);
         }
         .conversation-item .title {
             flex: 1;
@@ -98,7 +98,7 @@ export class ChatApp extends LitElement {
         }
         .conversation-item .meta {
             font-size: 11px;
-            color: var(--nr-chat-text-variant);
+            color: var(--wc-chat-text-variant);
         }
 
         /* Main area */
@@ -113,7 +113,7 @@ export class ChatApp extends LitElement {
             align-items: center;
             gap: 8px;
             padding: 8px 12px;
-            border-bottom: 1px solid var(--nr-chat-border);
+            border-bottom: 1px solid var(--wc-chat-border);
             min-height: 44px;
         }
         .messages {
@@ -146,11 +146,11 @@ export class ChatApp extends LitElement {
             align-items: center;
             justify-content: center;
         }
-        .avatar-assistant { background: var(--nr-chat-accent); color: var(--nr-chat-on-accent); }
-        .avatar-user { background: var(--nr-chat-surface-high); color: var(--nr-chat-text); }
+        .avatar-assistant { background: var(--wc-chat-accent); color: var(--wc-chat-on-accent); }
+        .avatar-user { background: var(--wc-chat-surface-high); color: var(--wc-chat-text); }
         .message-time {
             font-size: 11px;
-            color: var(--nr-chat-text-variant);
+            color: var(--wc-chat-text-variant);
             margin-top: 3px;
             padding: 0 2px;
         }
@@ -162,17 +162,17 @@ export class ChatApp extends LitElement {
             word-break: break-word;
         }
         .message.user {
-            background: var(--nr-chat-accent);
-            color: var(--nr-chat-on-accent);
+            background: var(--wc-chat-accent);
+            color: var(--wc-chat-on-accent);
             border-bottom-right-radius: 2px;
         }
         .message.assistant {
-            background: var(--nr-chat-surface-high);
+            background: var(--wc-chat-surface-high);
             border-bottom-left-radius: 2px;
         }
         .message.tool {
             align-self: flex-start;
-            background: var(--nr-chat-surface-base);
+            background: var(--wc-chat-surface-base);
             font-size: 12px;
             font-family: monospace;
             opacity: 0.7;
@@ -191,7 +191,7 @@ export class ChatApp extends LitElement {
             left: 0;
             right: 0;
             height: 24px;
-            background: linear-gradient(transparent, var(--nr-chat-surface-base));
+            background: linear-gradient(transparent, var(--wc-chat-surface-base));
             display: flex;
             align-items: flex-end;
             justify-content: center;
@@ -201,7 +201,7 @@ export class ChatApp extends LitElement {
         .message.system {
             align-self: center;
             font-size: 12px;
-            color: var(--nr-chat-text-variant);
+            color: var(--wc-chat-text-variant);
             font-style: italic;
         }
 
@@ -209,8 +209,8 @@ export class ChatApp extends LitElement {
         .file-badge {
             display: flex; align-items: center; gap: 6px;
             padding: 4px 8px; margin: 4px 12px 0;
-            background: var(--nr-chat-surface-low);
-            border: 1px solid var(--nr-chat-border);
+            background: var(--wc-chat-surface-low);
+            border: 1px solid var(--wc-chat-border);
             border-radius: 6px; font-size: 12px;
         }
         .file-badge .file-badge-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -227,8 +227,8 @@ export class ChatApp extends LitElement {
             position: absolute;
             bottom: calc(100% + 4px);
             left: 0;
-            background: var(--nr-chat-surface);
-            border: 1px solid var(--nr-chat-border);
+            background: var(--wc-chat-surface);
+            border: 1px solid var(--wc-chat-border);
             border-radius: 6px;
             box-shadow: var(--typo3-component-box-shadow-flyout, 0 4px 16px rgba(0,0,0,0.12));
             list-style: none;
@@ -246,7 +246,7 @@ export class ChatApp extends LitElement {
             font-size: 13px;
             white-space: nowrap;
         }
-        .attach-menu li:hover { background: var(--nr-chat-surface-base); }
+        .attach-menu li:hover { background: var(--wc-chat-surface-base); }
 
         /* Input area */
         .input-area {
@@ -254,23 +254,23 @@ export class ChatApp extends LitElement {
             align-items: center;
             gap: 8px;
             padding: 12px;
-            border-top: 1px solid var(--nr-chat-border);
-            background: var(--nr-chat-surface-low);
+            border-top: 1px solid var(--wc-chat-border);
+            background: var(--wc-chat-surface-low);
         }
         .input-wrap {
             flex: 1;
             display: flex;
             align-items: center;
             gap: 4px;
-            border: 1px solid var(--nr-chat-input-border);
+            border: 1px solid var(--wc-chat-input-border);
             border-radius: 20px;
             padding: 4px 4px 4px 12px;
-            background: var(--nr-chat-surface);
+            background: var(--wc-chat-surface);
             transition: border-color 0.15s, box-shadow 0.15s;
         }
         .input-wrap:focus-within {
-            border-color: var(--nr-chat-focus-ring);
-            box-shadow: 0 0 0 1px var(--nr-chat-focus-ring);
+            border-color: var(--wc-chat-focus-ring);
+            box-shadow: 0 0 0 1px var(--wc-chat-focus-ring);
         }
         .input-wrap textarea {
             flex: 1;
@@ -294,9 +294,9 @@ export class ChatApp extends LitElement {
             height: 34px;
             border-radius: 50%;
             border: none;
-            background: var(--nr-chat-accent);
+            background: var(--wc-chat-accent);
             background-image: none;
-            color: var(--nr-chat-on-accent);
+            color: var(--wc-chat-on-accent);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -304,7 +304,7 @@ export class ChatApp extends LitElement {
             transition: background 0.15s, opacity 0.15s;
             margin: 0 2px 0 0;
         }
-        .btn-send:hover:not(:disabled) { background: var(--nr-chat-accent-hover); background-image: none; }
+        .btn-send:hover:not(:disabled) { background: var(--wc-chat-accent-hover); background-image: none; }
         .btn-send:disabled { opacity: 0.35; cursor: not-allowed; }
 
         /* Buttons */
@@ -314,28 +314,28 @@ export class ChatApp extends LitElement {
             justify-content: center;
             gap: 4px;
             padding: 6px 12px;
-            border: 1px solid var(--nr-chat-input-border);
+            border: 1px solid var(--wc-chat-input-border);
             border-radius: 4px;
-            background: var(--nr-chat-surface);
+            background: var(--wc-chat-surface);
             cursor: pointer;
             font-size: 13px;
             white-space: nowrap;
             transition: background 0.15s;
         }
         .btn:hover {
-            background: var(--nr-chat-hover);
+            background: var(--wc-chat-hover);
         }
         .btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
         }
         .btn-primary {
-            background: var(--nr-chat-accent);
-            color: var(--nr-chat-on-accent);
+            background: var(--wc-chat-accent);
+            color: var(--wc-chat-on-accent);
             border-color: transparent;
         }
         .btn-primary:hover:not(:disabled) {
-            background: var(--nr-chat-accent-hover);
+            background: var(--wc-chat-accent-hover);
         }
         .btn-sm {
             padding: 4px 8px;
@@ -356,18 +356,18 @@ export class ChatApp extends LitElement {
             font-weight: 600;
             text-transform: uppercase;
         }
-        .status-idle { background: var(--nr-chat-success-bg); color: var(--nr-chat-success-text); }
+        .status-idle { background: var(--wc-chat-success-bg); color: var(--wc-chat-success-text); }
         .status-processing, .status-locked, .status-tool_loop {
-            background: var(--nr-chat-warning-bg); color: var(--nr-chat-warning-text);
+            background: var(--wc-chat-warning-bg); color: var(--wc-chat-warning-text);
         }
-        .status-failed { background: var(--nr-chat-danger-bg); color: var(--nr-chat-danger-text); }
+        .status-failed { background: var(--wc-chat-danger-bg); color: var(--wc-chat-danger-text); }
 
         .empty-state {
             flex: 1;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: var(--nr-chat-text-variant);
+            color: var(--wc-chat-text-variant);
             font-size: 14px;
             text-align: center;
             padding: 24px;
@@ -375,10 +375,10 @@ export class ChatApp extends LitElement {
 
         .issues-banner {
             padding: 8px 12px;
-            background: var(--nr-chat-warning-bg);
-            border-bottom: 1px solid var(--nr-chat-warning-border);
+            background: var(--wc-chat-warning-bg);
+            border-bottom: 1px solid var(--wc-chat-warning-border);
             font-size: 12px;
-            color: var(--nr-chat-warning-text);
+            color: var(--wc-chat-warning-text);
         }
 
         .spinner {
@@ -386,7 +386,7 @@ export class ChatApp extends LitElement {
             width: 14px;
             height: 14px;
             border: 2px solid color-mix(in srgb, currentColor 15%, transparent);
-            border-top-color: var(--nr-chat-accent);
+            border-top-color: var(--wc-chat-accent);
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
         }
@@ -398,7 +398,7 @@ export class ChatApp extends LitElement {
             gap: 4px;
             align-items: center;
             padding: 10px 14px;
-            background: var(--nr-chat-surface-high);
+            background: var(--wc-chat-surface-high);
             border-radius: 8px;
             border-bottom-left-radius: 2px;
             width: fit-content;
@@ -407,7 +407,7 @@ export class ChatApp extends LitElement {
             width: 7px;
             height: 7px;
             border-radius: 50%;
-            background: var(--nr-chat-text-variant);
+            background: var(--wc-chat-text-variant);
             animation: typing-bounce 1.2s infinite ease-in-out;
         }
         .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
@@ -607,7 +607,7 @@ export class ChatApp extends LitElement {
                     </div>
                 ` : nothing}
                 ${this.chat.errorMessage ? html`
-                    <div class="message system" style="color:var(--nr-chat-status-danger, #c62828);">
+                    <div class="message system" style="color:var(--wc-chat-status-danger, #c62828);">
                         Error: ${this.chat.errorMessage}
                         ${isResumable ? html`
                             <button class="btn btn-sm" @click=${() => this.chat.handleResume()}
@@ -761,4 +761,4 @@ export class ChatApp extends LitElement {
     }
 }
 
-customElements.define('nr-chat-app', ChatApp);
+customElements.define('wc-chat-app', ChatApp);

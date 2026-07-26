@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Netresearch\NrMcpAgent\Controller\ChatApiController;
+use Webconsulting\Typo3AiChat\Controller\ChatApiController;
 
 return [
     'ai_chat_status' => [
@@ -35,6 +35,11 @@ return [
         'target' => ChatApiController::class . '::resumeConversation',
         'methods' => ['POST'],
     ],
+    'ai_chat_conversation_approval' => [
+        'path' => '/ai-chat/conversations/approval',
+        'target' => ChatApiController::class . '::decideApproval',
+        'methods' => ['POST'],
+    ],
     'ai_chat_conversation_archive' => [
         'path' => '/ai-chat/conversations/archive',
         'target' => ChatApiController::class . '::archiveConversation',
@@ -58,6 +63,16 @@ return [
     'ai_chat_file_info' => [
         'path' => '/ai-chat/file-info',
         'target' => ChatApiController::class . '::fileInfo',
+        'methods' => ['GET'],
+    ],
+    'ai_chat_flue_trigger' => [
+        'path' => '/ai-chat/flue/trigger',
+        'target' => ChatApiController::class . '::triggerFlue',
+        'methods' => ['POST'],
+    ],
+    'ai_chat_flue_status' => [
+        'path' => '/ai-chat/flue/status',
+        'target' => ChatApiController::class . '::flueStatus',
         'methods' => ['GET'],
     ],
 ];

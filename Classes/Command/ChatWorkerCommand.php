@@ -2,13 +2,8 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Command;
+namespace Webconsulting\Typo3AiChat\Command;
 
-use Netresearch\NrMcpAgent\Domain\Repository\ConversationRepository;
-use Netresearch\NrMcpAgent\Enum\ConversationStatus;
-use Netresearch\NrMcpAgent\Service\ChatService;
-use Netresearch\NrMcpAgent\Utility\BackendUserInitializer;
-use Netresearch\NrMcpAgent\Utility\ErrorMessageSanitizer;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -16,6 +11,11 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Throwable;
 use TYPO3\CMS\Core\Database\ConnectionPool;
+use Webconsulting\Typo3AiChat\Domain\Repository\ConversationRepository;
+use Webconsulting\Typo3AiChat\Enum\ConversationStatus;
+use Webconsulting\Typo3AiChat\Service\ChatService;
+use Webconsulting\Typo3AiChat\Utility\BackendUserInitializer;
+use Webconsulting\Typo3AiChat\Utility\ErrorMessageSanitizer;
 
 #[AsCommand(name: 'ai-chat:worker', description: 'Long-running worker that processes chat conversations from queue')]
 final class ChatWorkerCommand extends Command

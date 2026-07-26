@@ -1,14 +1,14 @@
 <?php
 
 $EM_CONF[$_EXTKEY] = [
-    'title' => 'AI Chat',
-    'description' => 'AI chat assistant for the TYPO3 backend',
+    'title' => 'Webconsulting TYPO3 AI Chat',
+    'description' => 'Modern governed TYPO3 operator chat with MCP tools, approvals, rich attachments and optional Flue workflows. Inspired by nr-mcp-agent — thank you, Netresearch.',
     'category' => 'module',
-    'version' => '0.7.0',
+    'version' => '1.0.0',
     'state' => 'alpha',
-    'author' => 'Netresearch DTT GmbH',
-    'author_email' => 'typo3@netresearch.de',
-    'author_company' => 'Netresearch DTT GmbH',
+    'author' => 'Webconsulting; inspired by Netresearch DTT GmbH',
+    'author_email' => '',
+    'author_company' => 'Webconsulting',
     'constraints' => [
         'depends' => [
             'php' => '8.2.0-8.99.99',

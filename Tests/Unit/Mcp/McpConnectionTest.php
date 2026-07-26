@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Tests\Unit\Mcp;
+namespace Webconsulting\Typo3AiChat\Tests\Unit\Mcp;
 
-use Netresearch\NrMcpAgent\Mcp\McpConnection;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use RuntimeException;
+use Webconsulting\Typo3AiChat\Mcp\McpConnection;
 
 class McpConnectionTest extends TestCase
 {

@@ -1,4 +1,4 @@
-CREATE TABLE tx_nrmcpagent_conversation (
+CREATE TABLE tx_webconsultingaichat_conversation (
     uid int(11) unsigned NOT NULL AUTO_INCREMENT,
     pid int(11) unsigned DEFAULT 0 NOT NULL,
     deleted smallint(5) unsigned DEFAULT 0 NOT NULL,
@@ -8,6 +8,10 @@ CREATE TABLE tx_nrmcpagent_conversation (
     message_count int(11) unsigned DEFAULT 0 NOT NULL,
     status varchar(20) DEFAULT 'idle' NOT NULL,
     current_request_id varchar(64) DEFAULT '' NOT NULL,
+    run_uuid varchar(64) DEFAULT '' NOT NULL,
+    execution_trace mediumtext,
+    pending_approval mediumtext,
+    flue_run_uid int(11) unsigned DEFAULT 0 NOT NULL,
     system_prompt text,
     archived tinyint(1) unsigned DEFAULT 0 NOT NULL,
     pinned tinyint(1) unsigned DEFAULT 0 NOT NULL,
@@ -19,10 +23,12 @@ CREATE TABLE tx_nrmcpagent_conversation (
     KEY be_user_archived (be_user, archived, tstamp),
     KEY status_deleted_tstamp (status, deleted, tstamp),
     KEY be_user_status (be_user, status, deleted),
-    KEY current_request_id (current_request_id, status)
+    KEY current_request_id (current_request_id, status),
+    KEY run_uuid (run_uuid),
+    KEY flue_run_uid (flue_run_uid)
 );
 
-CREATE TABLE tx_nrmcpagent_mcp_server (
+CREATE TABLE tx_webconsultingaichat_mcp_server (
     uid int(11) unsigned NOT NULL AUTO_INCREMENT,
     pid int(11) unsigned DEFAULT 0 NOT NULL,
     deleted smallint(5) unsigned DEFAULT 0 NOT NULL,

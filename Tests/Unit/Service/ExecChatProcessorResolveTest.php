@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Tests\Unit\Service;
+namespace Webconsulting\Typo3AiChat\Tests\Unit\Service;
 
-use Netresearch\NrMcpAgent\Service\ExecChatProcessor;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
+use Webconsulting\Typo3AiChat\Service\ExecChatProcessor;
 
 /**
  * Targets mutation survivors in ExecChatProcessor::resolvePhpCliBinary() (line 42).

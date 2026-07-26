@@ -15,9 +15,9 @@ jobs:
       id-token: write
       attestations: write
     with:
-      archive-prefix: nr-mcp-agent
-      package-name: netresearch/nr-mcp-agent
-      extension-key: nr_mcp_agent
+      archive-prefix: typo3-ai-chat
+      package-name: webconsulting/typo3-ai-chat
+      extension-key: webconsulting_ai_chat
       # The extension is not published anywhere yet: no TER token in this
       # repo, not on Packagist (consumers use a VCS repository entry), not
       # registered on docs.typo3.org. Remove these as each channel is set up.

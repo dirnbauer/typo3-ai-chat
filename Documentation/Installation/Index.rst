@@ -28,7 +28,7 @@ Quick start
     your LLM provider (e.g. OpenAI, Anthropic). Note
     the UID.
 3.  Go to **Admin Tools > Settings > Extension
-    Configuration > nr_mcp_agent** and set ``llmTaskUid``
+    Configuration > webconsulting_ai_chat** and set ``llmTaskUid``
     to the Task UID from step 2.
 
 The AI Chat module is now available under
@@ -39,7 +39,7 @@ Composer installation
 
 ..  code-block:: bash
 
-    composer require netresearch/nr-mcp-agent
+    composer require webconsulting/typo3-ai-chat
 
 After installation, run the database migrations:
 
@@ -71,8 +71,8 @@ development:
 
 ..  code-block:: bash
 
-    git clone https://github.com/netresearch/t3x-nr-mcp-agent.git
-    cd t3x-nr-mcp-agent
+    git clone https://github.com/webconsulting/typo3-ai-chat.git
+    cd typo3-ai-chat
     ddev start
     ddev composer install
     ddev typo3 database:updateschema

@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Backend\ToolbarItems;
+namespace Webconsulting\Typo3AiChat\Backend\ToolbarItems;
 
-use Netresearch\NrMcpAgent\Configuration\ExtensionConfiguration;
 use Psr\Http\Message\ServerRequestInterface;
 use TYPO3\CMS\Backend\Toolbar\RequestAwareToolbarItemInterface;
 use TYPO3\CMS\Backend\Toolbar\ToolbarItemInterface;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Page\PageRenderer;
+use Webconsulting\Typo3AiChat\Configuration\ExtensionConfiguration;
 
 final readonly class ChatToolbarItem implements ToolbarItemInterface, RequestAwareToolbarItemInterface
 {
@@ -55,13 +55,14 @@ final readonly class ChatToolbarItem implements ToolbarItemInterface, RequestAwa
 
     public function getItem(): string
     {
-        $this->pageRenderer->loadJavaScriptModule('@netresearch/nr-mcp-agent/toolbar/chat-panel.js');
-        $this->pageRenderer->addInlineLanguageLabelFile('EXT:nr_mcp_agent/Resources/Private/Language/locallang_chat.xlf');
+        $this->pageRenderer->loadJavaScriptModule('@webconsulting/typo3-ai-chat/toolbar/chat-panel.js');
+        $this->pageRenderer->addCssFile('EXT:webconsulting_ai_chat/Resources/Public/JavaScript/Dist/operator.css');
+        $this->pageRenderer->addInlineLanguageLabelFile('EXT:webconsulting_ai_chat/Resources/Private/Language/locallang_chat.xlf');
 
         // Badge count is updated client-side from the status endpoint
         // to avoid a DB query on every backend page load.
-        return '<span class="toolbar-item-link ai-chat-toolbar-btn" role="button" title="AI Chat" tabindex="0">'
-            . '<typo3-backend-icon identifier="toolbar-nr-mcp-agent" size="small"></typo3-backend-icon>'
+        return '<span class="toolbar-item-link ai-chat-toolbar-btn" role="button" aria-label="Open TYPO3 AI Chat" aria-expanded="false" title="TYPO3 AI Chat" tabindex="0">'
+            . '<typo3-backend-icon identifier="toolbar-typo3-ai-chat" size="small"></typo3-backend-icon>'
             . '<span class="badge badge-warning ai-chat-badge" style="display:none">0</span>'
             . '</span>';
     }

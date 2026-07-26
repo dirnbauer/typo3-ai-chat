@@ -91,7 +91,7 @@ test.describe('FAL picker overlay', () => {
         const src = await iframe.getAttribute('src') ?? '';
         expect(src).toContain('mode=file');
         expect(src).toContain('bparams=');
-        expect(decodeURIComponent(src)).toContain('nr_mcp_agent_fal_picker');
+        expect(decodeURIComponent(src)).toContain('webconsulting_ai_chat_fal_picker');
     });
 
     test('overlay has correct ARIA attributes (role=dialog, aria-modal=true)', async ({ page }) => {
@@ -139,7 +139,7 @@ test.describe('FAL picker overlay', () => {
                     origin: globalThis.location.origin,
                     data: {
                         actionName: 'typo3:elementBrowser:elementAdded',
-                        fieldName: 'nr_mcp_agent_fal_picker',
+                        fieldName: 'webconsulting_ai_chat_fal_picker',
                         value: '1',   // uid=1 — will be passed to getFileInfo
                         label: 'test.pdf',
                     },
@@ -166,7 +166,7 @@ test.describe('FAL picker overlay', () => {
                     origin: globalThis.location.origin,
                     data: {
                         actionName: 'typo3:elementBrowser:elementAdded',
-                        fieldName: 'nr_mcp_agent_fal_picker',
+                        fieldName: 'webconsulting_ai_chat_fal_picker',
                         value: '1',
                         label: 'test.pdf',
                     },
@@ -219,7 +219,7 @@ test.describe('FAL picker overlay', () => {
         await page.evaluate(() => {
             const data = {
                 actionName: 'typo3:elementBrowser:elementAdded',
-                fieldName: 'nr_mcp_agent_fal_picker',
+                fieldName: 'webconsulting_ai_chat_fal_picker',
                 value: '1',
             };
             const opts = { origin: globalThis.location.origin, data };

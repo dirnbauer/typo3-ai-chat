@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Tests\Unit\Domain\Model;
+namespace Webconsulting\Typo3AiChat\Tests\Unit\Domain\Model;
 
-use Netresearch\NrMcpAgent\Domain\Model\Conversation;
-use Netresearch\NrMcpAgent\Enum\ConversationStatus;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use stdClass;
+use Webconsulting\Typo3AiChat\Domain\Model\Conversation;
+use Webconsulting\Typo3AiChat\Enum\ConversationStatus;
 
 /**
  * Targeted at mutation survivors in Conversation::fromRow(), toRow(),

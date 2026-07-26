@@ -2,26 +2,26 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Tests\Functional\Controller;
+namespace Webconsulting\Typo3AiChat\Tests\Functional\Controller;
 
-use Netresearch\NrMcpAgent\Configuration\ExtensionConfiguration;
-use Netresearch\NrMcpAgent\Controller\ChatApiController;
-use Netresearch\NrMcpAgent\Document\DocumentExtractorRegistry;
-use Netresearch\NrMcpAgent\Domain\Repository\ConversationRepository;
-use Netresearch\NrMcpAgent\Service\ChatCapabilitiesInterface;
-use Netresearch\NrMcpAgent\Service\ChatProcessorInterface;
 use PHPUnit\Framework\Attributes\Test;
 use TYPO3\CMS\Core\Http\ServerRequest;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
 use TYPO3\CMS\Core\Resource\StorageRepository;
 use TYPO3\TestingFramework\Core\Functional\FunctionalTestCase;
+use Webconsulting\Typo3AiChat\Configuration\ExtensionConfiguration;
+use Webconsulting\Typo3AiChat\Controller\ChatApiController;
+use Webconsulting\Typo3AiChat\Document\DocumentExtractorRegistry;
+use Webconsulting\Typo3AiChat\Domain\Repository\ConversationRepository;
+use Webconsulting\Typo3AiChat\Service\ChatCapabilitiesInterface;
+use Webconsulting\Typo3AiChat\Service\ChatProcessorInterface;
 
 class ChatApiControllerTest extends FunctionalTestCase
 {
     protected array $testExtensionsToLoad = [
         'netresearch/nr-vault',
         'netresearch/nr-llm',
-        'netresearch/nr-mcp-agent',
+        'webconsulting/typo3-ai-chat',
     ];
 
     private ConversationRepository $repository;
@@ -31,7 +31,7 @@ class ChatApiControllerTest extends FunctionalTestCase
     {
         parent::setUp();
         $this->importCSVDataSet(__DIR__ . '/../Fixtures/be_users.csv');
-        $this->importCSVDataSet(__DIR__ . '/../Fixtures/tx_nrmcpagent_conversation.csv');
+        $this->importCSVDataSet(__DIR__ . '/../Fixtures/tx_webconsultingaichat_conversation.csv');
 
         $backendUser = $this->setUpBackendUser(1);
         $GLOBALS['BE_USER'] = $backendUser;

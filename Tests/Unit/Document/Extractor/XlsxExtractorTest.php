@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Tests\Unit\Document\Extractor;
+namespace Webconsulting\Typo3AiChat\Tests\Unit\Document\Extractor;
 
-use Netresearch\NrMcpAgent\Document\Extractor\XlsxExtractor;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use Webconsulting\Typo3AiChat\Document\Extractor\XlsxExtractor;
 
 class XlsxExtractorTest extends TestCase
 {

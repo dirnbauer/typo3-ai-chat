@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Tests\Unit\Service;
+namespace Webconsulting\Typo3AiChat\Tests\Unit\Service;
 
 use Netresearch\NrLlm\Domain\Enum\AgentRunOutcome;
 use Netresearch\NrLlm\Domain\Model\LlmConfiguration;
@@ -19,13 +19,6 @@ use Netresearch\NrLlm\Provider\ProviderAdapterRegistryInterface;
 use Netresearch\NrLlm\Service\Agent\AgentRunRequest;
 use Netresearch\NrLlm\Service\Agent\AgentRunResult;
 use Netresearch\NrLlm\Service\Agent\AgentRuntimeInterface;
-use Netresearch\NrMcpAgent\Configuration\ExtensionConfiguration;
-use Netresearch\NrMcpAgent\Document\DocumentExtractorRegistry;
-use Netresearch\NrMcpAgent\Domain\Model\Conversation;
-use Netresearch\NrMcpAgent\Domain\Repository\ConversationRepository;
-use Netresearch\NrMcpAgent\Enum\ConversationStatus;
-use Netresearch\NrMcpAgent\Enum\MessageRole;
-use Netresearch\NrMcpAgent\Service\ChatService;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
@@ -37,6 +30,13 @@ use TYPO3\CMS\Core\Resource\ResourceFactory;
 use TYPO3\CMS\Core\Site\Entity\Site;
 use TYPO3\CMS\Core\Site\Entity\SiteLanguage;
 use TYPO3\CMS\Core\Site\SiteFinder;
+use Webconsulting\Typo3AiChat\Configuration\ExtensionConfiguration;
+use Webconsulting\Typo3AiChat\Document\DocumentExtractorRegistry;
+use Webconsulting\Typo3AiChat\Domain\Model\Conversation;
+use Webconsulting\Typo3AiChat\Domain\Repository\ConversationRepository;
+use Webconsulting\Typo3AiChat\Enum\ConversationStatus;
+use Webconsulting\Typo3AiChat\Enum\MessageRole;
+use Webconsulting\Typo3AiChat\Service\ChatService;
 
 class ChatServiceTest extends TestCase
 {
@@ -843,7 +843,7 @@ class ChatServiceTest extends TestCase
     {
         $provider = $this->createMock(ProviderInterface::class);
 
-        $extractor = $this->createMock(\Netresearch\NrMcpAgent\Document\DocumentExtractorInterface::class);
+        $extractor = $this->createMock(\Webconsulting\Typo3AiChat\Document\DocumentExtractorInterface::class);
         $extractor->method('isAvailable')->willReturn(true);
         $extractor->method('getSupportedMimeTypes')->willReturn(['text/plain']);
         $extractor->method('extract')->willReturn('Hello TXT');

@@ -5,7 +5,7 @@ import { test, expect, FrameLocator, Page } from '@playwright/test';
  *
  * These tests run against a live TYPO3 v13 instance via DDEV.
  * The module content is rendered inside a TYPO3 backend iframe.
- * The <nr-chat-app> Lit 3 web component uses shadow DOM.
+ * The <wc-chat-app> Lit 3 web component uses shadow DOM.
  *
  * Note: In a test environment without LLM configuration, the chat module
  * displays "AI Chat is not available" and disables the New button.
@@ -30,7 +30,7 @@ async function navigateToModule(page: Page): Promise<FrameLocator> {
     await expect(iframeEl).toBeVisible({ timeout: 10000 });
     const iframe = page.frameLocator('iframe').first();
     // Wait for the Lit component inside the iframe
-    await expect(iframe.locator('nr-chat-app')).toBeVisible({ timeout: 15000 });
+    await expect(iframe.locator('wc-chat-app')).toBeVisible({ timeout: 15000 });
     return iframe;
 }
 
@@ -56,20 +56,20 @@ test.describe('AI Chat Backend Module', () => {
         await expect(chatLink).toHaveCount(1);
     });
 
-    test('AI Chat module loads and renders nr-chat-app', async ({ page }) => {
+    test('AI Chat module loads and renders wc-chat-app', async ({ page }) => {
         const iframe = await navigateToModule(page);
-        await expect(iframe.locator('nr-chat-app')).toBeVisible();
+        await expect(iframe.locator('wc-chat-app')).toBeVisible();
     });
 
-    test('nr-chat-app has data-max-length attribute', async ({ page }) => {
+    test('wc-chat-app has data-max-length attribute', async ({ page }) => {
         const iframe = await navigateToModule(page);
-        const chatApp = iframe.locator('nr-chat-app');
+        const chatApp = iframe.locator('wc-chat-app');
         await expect(chatApp).toHaveAttribute('data-max-length', /\d+/);
     });
 
     test('chat app renders conversation sidebar', async ({ page }) => {
         const iframe = await navigateToModule(page);
-        const chatApp = iframe.locator('nr-chat-app');
+        const chatApp = iframe.locator('wc-chat-app');
 
         // The sidebar shows "Conversations" heading and "No conversations yet"
         const conversationsHeading = chatApp.getByRole('heading', { name: 'Conversations' });
@@ -81,7 +81,7 @@ test.describe('AI Chat Backend Module', () => {
 
     test('chat app shows "+ New" button', async ({ page }) => {
         const iframe = await navigateToModule(page);
-        const chatApp = iframe.locator('nr-chat-app');
+        const chatApp = iframe.locator('wc-chat-app');
 
         const newBtn = chatApp.getByRole('button', { name: /new/i });
         await expect(newBtn).toBeVisible({ timeout: 5000 });
@@ -89,7 +89,7 @@ test.describe('AI Chat Backend Module', () => {
 
     test('shows unavailable message when LLM is not configured', async ({ page }) => {
         const iframe = await navigateToModule(page);
-        const chatApp = iframe.locator('nr-chat-app');
+        const chatApp = iframe.locator('wc-chat-app');
 
         // Without LLM configuration, the module shows an unavailability notice
         const unavailableMsg = chatApp.getByText(/not available|check.*configuration/i);
@@ -98,7 +98,7 @@ test.describe('AI Chat Backend Module', () => {
 
     test('new button is disabled when chat is unavailable', async ({ page }) => {
         const iframe = await navigateToModule(page);
-        const chatApp = iframe.locator('nr-chat-app');
+        const chatApp = iframe.locator('wc-chat-app');
 
         const newBtn = chatApp.getByRole('button', { name: /new/i });
         await expect(newBtn).toBeVisible({ timeout: 5000 });

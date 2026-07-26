@@ -36,7 +36,7 @@ Added
   user groups.
 - Extension configuration: LLM Task UID, max message length, max
   active conversations per user, MCP toggle.
-- Lit-based web component frontend (``<nr-chat-app>``) with
+- Lit-based web component frontend (``<wc-chat-app>``) with
   conversation list, message polling, file attachment UI.
 - PHPStan Level 10, PHP-CS-Fixer, Rector, Infection mutation
   testing (≥70% MSI) — full CI pipeline on PHP 8.2–8.4 × TYPO3

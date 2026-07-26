@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Service;
+namespace Webconsulting\Typo3AiChat\Service;
 
 use LogicException;
 use Netresearch\NrLlm\Domain\Enum\AgentRunOutcome;
@@ -10,6 +10,8 @@ use Netresearch\NrLlm\Domain\Model\LlmConfiguration;
 use Netresearch\NrLlm\Domain\Repository\TaskRepository;
 use Netresearch\NrLlm\Domain\ValueObject\AiActorContext;
 use Netresearch\NrLlm\Domain\ValueObject\ChatMessage;
+use Netresearch\NrLlm\Domain\ValueObject\ToolCall;
+use Netresearch\NrLlm\Domain\ValueObject\ToolInvocation;
 use Netresearch\NrLlm\Provider\Contract\DocumentCapableInterface;
 use Netresearch\NrLlm\Provider\Contract\ProviderInterface;
 use Netresearch\NrLlm\Provider\Contract\VisionCapableInterface;
@@ -17,19 +19,20 @@ use Netresearch\NrLlm\Provider\ProviderAdapterRegistryInterface;
 use Netresearch\NrLlm\Service\Agent\AgentRunRequest;
 use Netresearch\NrLlm\Service\Agent\AgentRunResult;
 use Netresearch\NrLlm\Service\Agent\AgentRuntimeInterface;
-use Netresearch\NrMcpAgent\Configuration\ExtensionConfiguration;
-use Netresearch\NrMcpAgent\Document\DocumentExtractorRegistry;
-use Netresearch\NrMcpAgent\Domain\Model\Conversation;
-use Netresearch\NrMcpAgent\Domain\Repository\ConversationRepository;
-use Netresearch\NrMcpAgent\Enum\ConversationStatus;
-use Netresearch\NrMcpAgent\Enum\MessageRole;
-use Netresearch\NrMcpAgent\Exception\ChatException;
-use Netresearch\NrMcpAgent\Exception\Exception as NrMcpAgentException;
-use Netresearch\NrMcpAgent\Utility\ErrorMessageSanitizer;
+use Netresearch\NrLlm\Service\Agent\ApprovalDecision;
 use Throwable;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
 use TYPO3\CMS\Core\Site\SiteFinder;
+use Webconsulting\Typo3AiChat\Configuration\ExtensionConfiguration;
+use Webconsulting\Typo3AiChat\Document\DocumentExtractorRegistry;
+use Webconsulting\Typo3AiChat\Domain\Model\Conversation;
+use Webconsulting\Typo3AiChat\Domain\Repository\ConversationRepository;
+use Webconsulting\Typo3AiChat\Enum\ConversationStatus;
+use Webconsulting\Typo3AiChat\Enum\MessageRole;
+use Webconsulting\Typo3AiChat\Exception\ChatException;
+use Webconsulting\Typo3AiChat\Exception\Exception as Typo3AiChatException;
+use Webconsulting\Typo3AiChat\Utility\ErrorMessageSanitizer;
 
 /**
  * Runs a backend chat turn through nr-llm's AgentRuntime.
@@ -128,6 +131,22 @@ final class ChatService implements ChatCapabilitiesInterface
         }
     }
 
+    public function decideApproval(Conversation $conversation, bool $approved, int $decidedBy): void
+    {
+        if ($conversation->getStatus() !== ConversationStatus::AwaitingApproval || $conversation->getRunUuid() === '') {
+            throw new ChatException('This conversation has no agent run awaiting approval.', 1764174501);
+        }
+
+        $result = $this->agentRuntime->approve(
+            $this->resolveActor($conversation->getBeUser()),
+            $conversation->getRunUuid(),
+            new ApprovalDecision($approved, $decidedBy),
+        );
+
+        $conversation->setPendingApproval([]);
+        $this->applyResult($conversation, $result);
+    }
+
     public function resumeConversation(Conversation $conversation): void
     {
         if (!$conversation->isResumable()) {
@@ -216,9 +235,31 @@ final class ChatService implements ChatCapabilitiesInterface
      */
     private function applyResult(Conversation $conversation, AgentRunResult $result): void
     {
+        $conversation->setRunUuid($result->runUuid);
+
         if ($result->outcome === AgentRunOutcome::COMPLETED && $result->loopResult !== null) {
+            $conversation->setExecutionTrace(array_merge(
+                $conversation->getExecutionTrace(),
+                $this->serializeTrace($result->loopResult->trace),
+            ));
             $conversation->appendMessage(MessageRole::Assistant, $result->loopResult->finalContent);
+            $conversation->setPendingApproval([]);
             $conversation->setStatus(ConversationStatus::Idle);
+            $this->persist($conversation);
+            return;
+        }
+
+        if ($result->outcome === AgentRunOutcome::AWAITING_APPROVAL && $result->suspendedState !== null) {
+            $pending = array_map(
+                static fn(ToolCall $call): array => [
+                    'name' => $call->name,
+                    'arguments' => $call->arguments,
+                ],
+                $result->suspendedState->toolCalls(),
+            );
+            $conversation->setPendingApproval($pending);
+            $conversation->setStatus(ConversationStatus::AwaitingApproval);
+            $conversation->setErrorMessage('');
             $this->persist($conversation);
             return;
         }
@@ -226,6 +267,23 @@ final class ChatService implements ChatCapabilitiesInterface
         $conversation->setStatus(ConversationStatus::Failed);
         $conversation->setErrorMessage($this->describeFailure($result));
         $this->persist($conversation);
+    }
+
+    /**
+     * @param list<ToolInvocation> $trace
+     * @return list<array{name: string, arguments: array<string, mixed>, result: string, isError: bool}>
+     */
+    private function serializeTrace(array $trace): array
+    {
+        return array_map(
+            static fn(ToolInvocation $invocation): array => [
+                'name' => $invocation->name,
+                'arguments' => $invocation->arguments,
+                'result' => $invocation->result,
+                'isError' => $invocation->isError,
+            ],
+            $trace,
+        );
     }
 
     /**
@@ -253,19 +311,19 @@ final class ChatService implements ChatCapabilitiesInterface
      * nr-llm Task (llmTaskUid → Task → Configuration) and cache the Task and
      * Configuration prompts for {@see buildSystemPrompt()}.
      *
-     * @throws NrMcpAgentException when the Task or its Configuration is missing
+     * @throws Typo3AiChatException when the Task or its Configuration is missing
      */
     private function resolveConfiguration(): LlmConfiguration
     {
         $taskUid = $this->config->getLlmTaskUid();
         $task = $this->taskRepository->findByUid($taskUid);
         if ($task === null) {
-            throw new NrMcpAgentException(sprintf('nr-llm Task with uid %d not found', $taskUid));
+            throw new Typo3AiChatException(sprintf('nr-llm Task with uid %d not found', $taskUid));
         }
 
         $configuration = $task->getConfiguration();
         if ($configuration === null) {
-            throw new NrMcpAgentException(sprintf('nr-llm Task with uid %d has no LLM configuration assigned', $taskUid));
+            throw new Typo3AiChatException(sprintf('nr-llm Task with uid %d has no LLM configuration assigned', $taskUid));
         }
 
         $this->resolvedPrompts = [
@@ -281,13 +339,13 @@ final class ChatService implements ChatCapabilitiesInterface
      * Used only for multimodal file expansion and capability reporting — the
      * chat turn itself runs through the AgentRuntime.
      *
-     * @throws NrMcpAgentException when the configuration has no fixed model
+     * @throws Typo3AiChatException when the configuration has no fixed model
      */
     private function resolveProvider(LlmConfiguration $configuration): ProviderInterface
     {
         $model = $configuration->getLlmModel();
         if ($model === null) {
-            throw new NrMcpAgentException('The nr-llm configuration has no fixed model to resolve a provider adapter from.');
+            throw new Typo3AiChatException('The nr-llm configuration has no fixed model to resolve a provider adapter from.');
         }
 
         return $this->adapterRegistry->createAdapterFromModel($model);
@@ -304,39 +362,78 @@ final class ChatService implements ChatCapabilitiesInterface
     {
         $result = [];
         foreach ($messages as $msg) {
-            if (!isset($msg['fileUid'])) {
+            $attachments = $this->messageAttachments($msg);
+            if ($attachments === []) {
                 $result[] = $msg;
                 continue;
             }
 
             try {
-                if (is_int($msg['fileUid'])) {
-                    $fileUid = $msg['fileUid'];
-                } else {
-                    $fileUid = is_numeric($msg['fileUid']) ? (int) $msg['fileUid'] : 0;
+                $content = [
+                    ['type' => 'text', 'text' => is_string($msg['content'] ?? null) ? $msg['content'] : ''],
+                ];
+                foreach ($attachments as $attachment) {
+                    $fileUid = is_numeric($attachment['fileUid'] ?? null) ? (int) $attachment['fileUid'] : 0;
+                    $file = $this->resourceFactory->getFileObject($fileUid);
+                    $localPath = $file->getForLocalProcessing(false);
+                    $base64 = base64_encode((string) file_get_contents($localPath));
+                    $content[] = $this->buildFileContentBlock($file->getMimeType(), $base64, $localPath, $provider);
                 }
-                $file = $this->resourceFactory->getFileObject($fileUid);
-                $localPath = $file->getForLocalProcessing(false);
-                $base64 = base64_encode((string) file_get_contents($localPath));
-                $mimeType = $file->getMimeType();
 
                 $result[] = [
                     'role' => is_string($msg['role']) ? $msg['role'] : '',
-                    'content' => [
-                        ['type' => 'text', 'text' => is_string($msg['content'] ?? null) ? $msg['content'] : ''],
-                        $this->buildFileContentBlock($mimeType, $base64, $localPath, $provider),
-                    ],
+                    'content' => $content,
                 ];
             } catch (Throwable) {
-                $fileName = isset($msg['fileName']) && is_string($msg['fileName']) ? $msg['fileName'] : 'unknown';
+                $fileNames = array_map(
+                    static fn(array $attachment): string => is_string($attachment['fileName'] ?? null)
+                        ? $attachment['fileName']
+                        : 'unknown',
+                    $attachments,
+                );
                 $content = is_string($msg['content'] ?? null) ? $msg['content'] : '';
                 $result[] = [
                     'role' => is_string($msg['role']) ? $msg['role'] : '',
-                    'content' => $content . "\n\n[Attached file '" . $fileName . "' is no longer available]",
+                    'content' => $content . "\n\n[Attached file(s) '" . implode("', '", $fileNames) . "' are no longer available]",
                 ];
             }
         }
         return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $message
+     * @return list<array<string, mixed>>
+     */
+    private function messageAttachments(array $message): array
+    {
+        if (isset($message['attachments']) && is_array($message['attachments'])) {
+            $attachments = [];
+            foreach ($message['attachments'] as $attachment) {
+                if (!is_array($attachment)) {
+                    continue;
+                }
+                $normalized = [];
+                foreach ($attachment as $key => $value) {
+                    if (is_string($key)) {
+                        $normalized[$key] = $value;
+                    }
+                }
+                $attachments[] = $normalized;
+            }
+
+            return $attachments;
+        }
+
+        if (isset($message['fileUid'])) {
+            return [[
+                'fileUid' => $message['fileUid'],
+                'fileName' => $message['fileName'] ?? 'attachment',
+                'fileMimeType' => $message['fileMimeType'] ?? '',
+            ]];
+        }
+
+        return [];
     }
 
     /**

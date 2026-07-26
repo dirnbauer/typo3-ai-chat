@@ -1,4 +1,4 @@
-# Opengrep / Semgrep exclude list for nr-mcp-agent.
+# Opengrep / Semgrep exclude list for typo3-ai-chat.
 #
 # Consumed by the `security / SAST (Opengrep)` CI job (typo3-ci-workflows
 # security.yml). Opengrep scans production source; build artefacts, vendored

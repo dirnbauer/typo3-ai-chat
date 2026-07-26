@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Document;
+namespace Webconsulting\Typo3AiChat\Document;
 
-use Netresearch\NrMcpAgent\Exception\DocumentExtractionException;
+use Webconsulting\Typo3AiChat\Exception\DocumentExtractionException;
 
 final readonly class DocumentExtractorRegistry
 {

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Tests\Architecture;
+namespace Webconsulting\Typo3AiChat\Tests\Architecture;
 
 use PHPat\Selector\Selector;
 use PHPat\Test\Builder\Rule;
@@ -25,11 +25,11 @@ final class DocumentExtractorArchitectureTest
     public function extractorsDoNotDependOnChatService(): Rule
     {
         return PHPat::rule()
-            ->classes(Selector::inNamespace('Netresearch\NrMcpAgent\Document'))
+            ->classes(Selector::inNamespace('Webconsulting\Typo3AiChat\Document'))
             ->shouldNotDependOn()
             ->classes(
-                Selector::classname(\Netresearch\NrMcpAgent\Service\ChatService::class),
-                Selector::inNamespace('Netresearch\NrMcpAgent\Controller'),
+                Selector::classname(\Webconsulting\Typo3AiChat\Service\ChatService::class),
+                Selector::inNamespace('Webconsulting\Typo3AiChat\Controller'),
             );
     }
 }

@@ -8,8 +8,8 @@ return [
         'backend.module',
     ],
     'imports' => [
-        '@netresearch/nr-mcp-agent/' => 'EXT:nr_mcp_agent/Resources/Public/JavaScript/',
-        'marked' => 'EXT:nr_mcp_agent/Resources/Public/JavaScript/Vendor/marked.esm.js',
-        'dompurify' => 'EXT:nr_mcp_agent/Resources/Public/JavaScript/Vendor/dompurify.esm.js',
+        '@webconsulting/typo3-ai-chat/' => 'EXT:webconsulting_ai_chat/Resources/Public/JavaScript/',
+        'marked' => 'EXT:webconsulting_ai_chat/Resources/Public/JavaScript/Vendor/marked.esm.js',
+        'dompurify' => 'EXT:webconsulting_ai_chat/Resources/Public/JavaScript/Vendor/dompurify.esm.js',
     ],
 ];

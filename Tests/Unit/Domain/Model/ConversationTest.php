@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Tests\Unit\Domain\Model;
+namespace Webconsulting\Typo3AiChat\Tests\Unit\Domain\Model;
 
 use JsonException;
-use Netresearch\NrMcpAgent\Domain\Model\Conversation;
-use Netresearch\NrMcpAgent\Enum\ConversationStatus;
-use Netresearch\NrMcpAgent\Enum\MessageRole;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use Webconsulting\Typo3AiChat\Domain\Model\Conversation;
+use Webconsulting\Typo3AiChat\Enum\ConversationStatus;
+use Webconsulting\Typo3AiChat\Enum\MessageRole;
 
 class ConversationTest extends TestCase
 {

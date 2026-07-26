@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Tests\Unit\Utility;
+namespace Webconsulting\Typo3AiChat\Tests\Unit\Utility;
 
-use Netresearch\NrMcpAgent\Utility\ErrorMessageSanitizer;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use Webconsulting\Typo3AiChat\Utility\ErrorMessageSanitizer;
 
 class ErrorMessageSanitizerTest extends TestCase
 {

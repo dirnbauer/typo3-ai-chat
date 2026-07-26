@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Tests\Architecture;
+namespace Webconsulting\Typo3AiChat\Tests\Architecture;
 
 use PHPat\Selector\Selector;
 use PHPat\Test\Builder\BuildStep;
@@ -10,17 +10,17 @@ use PHPat\Test\PHPat;
 
 final class LayerDependencyTest
 {
-    private const CONTROLLER_NAMESPACE = 'Netresearch\NrMcpAgent\Controller';
-    private const MCP_NAMESPACE = 'Netresearch\NrMcpAgent\Mcp';
+    private const CONTROLLER_NAMESPACE = 'Webconsulting\Typo3AiChat\Controller';
+    private const MCP_NAMESPACE = 'Webconsulting\Typo3AiChat\Mcp';
 
     public function testDomainDoesNotDependOnInfrastructure(): BuildStep
     {
         return PHPat::rule()
-            ->classes(Selector::inNamespace('Netresearch\NrMcpAgent\Domain'))
+            ->classes(Selector::inNamespace('Webconsulting\Typo3AiChat\Domain'))
             ->shouldNotDependOn()
             ->classes(
                 Selector::inNamespace(self::CONTROLLER_NAMESPACE),
-                Selector::inNamespace('Netresearch\NrMcpAgent\Command'),
+                Selector::inNamespace('Webconsulting\Typo3AiChat\Command'),
                 Selector::inNamespace(self::MCP_NAMESPACE),
             )
             ->because('Domain layer must not depend on infrastructure (Controller, Command, Mcp)');
@@ -29,7 +29,7 @@ final class LayerDependencyTest
     public function testServicesDoNotAccessDatabaseDirectly(): BuildStep
     {
         return PHPat::rule()
-            ->classes(Selector::inNamespace('Netresearch\NrMcpAgent\Service'))
+            ->classes(Selector::inNamespace('Webconsulting\Typo3AiChat\Service'))
             ->shouldNotDependOn()
             ->classes(Selector::classname('TYPO3\CMS\Core\Database\ConnectionPool'))
             ->because('Services must use repositories instead of accessing the database directly');
@@ -47,12 +47,12 @@ final class LayerDependencyTest
     public function testHookDoesNotDependOnController(): BuildStep
     {
         return PHPat::rule()
-            ->classes(Selector::inNamespace('Netresearch\NrMcpAgent\Hook'))
+            ->classes(Selector::inNamespace('Webconsulting\Typo3AiChat\Hook'))
             ->shouldNotDependOn()
             ->classes(
                 Selector::inNamespace(self::CONTROLLER_NAMESPACE),
                 Selector::inNamespace(self::MCP_NAMESPACE),
-                Selector::inNamespace('Netresearch\NrMcpAgent\Service'),
+                Selector::inNamespace('Webconsulting\Typo3AiChat\Service'),
             )
             ->because('Hook layer must not depend on Controller, Mcp, or Service layers');
     }

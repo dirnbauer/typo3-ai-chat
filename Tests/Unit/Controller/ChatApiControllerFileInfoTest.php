@@ -2,16 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Tests\Unit\Controller;
+namespace Webconsulting\Typo3AiChat\Tests\Unit\Controller;
 
 use InvalidArgumentException;
-use Netresearch\NrMcpAgent\Configuration\ExtensionConfiguration;
-use Netresearch\NrMcpAgent\Controller\ChatApiController;
-use Netresearch\NrMcpAgent\Document\DocumentExtractorInterface;
-use Netresearch\NrMcpAgent\Document\DocumentExtractorRegistry;
-use Netresearch\NrMcpAgent\Domain\Repository\ConversationRepository;
-use Netresearch\NrMcpAgent\Service\ChatCapabilitiesInterface;
-use Netresearch\NrMcpAgent\Service\ChatProcessorInterface;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\ServerRequestInterface;
@@ -20,6 +13,13 @@ use TYPO3\CMS\Core\Resource\Exception\FileDoesNotExistException;
 use TYPO3\CMS\Core\Resource\File;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
 use TYPO3\CMS\Core\Resource\StorageRepository;
+use Webconsulting\Typo3AiChat\Configuration\ExtensionConfiguration;
+use Webconsulting\Typo3AiChat\Controller\ChatApiController;
+use Webconsulting\Typo3AiChat\Document\DocumentExtractorInterface;
+use Webconsulting\Typo3AiChat\Document\DocumentExtractorRegistry;
+use Webconsulting\Typo3AiChat\Domain\Repository\ConversationRepository;
+use Webconsulting\Typo3AiChat\Service\ChatCapabilitiesInterface;
+use Webconsulting\Typo3AiChat\Service\ChatProcessorInterface;
 
 class ChatApiControllerFileInfoTest extends TestCase
 {

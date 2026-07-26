@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Document\Extractor;
+namespace Webconsulting\Typo3AiChat\Document\Extractor;
 
-use Netresearch\NrMcpAgent\Document\DocumentExtractorInterface;
-use Netresearch\NrMcpAgent\Exception\DocumentExtractionException;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use Throwable;
+use Webconsulting\Typo3AiChat\Document\DocumentExtractorInterface;
+use Webconsulting\Typo3AiChat\Exception\DocumentExtractionException;
 
 final class XlsxExtractor implements DocumentExtractorInterface
 {

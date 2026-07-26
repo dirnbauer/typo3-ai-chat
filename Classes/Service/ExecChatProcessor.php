@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Service;
+namespace Webconsulting\Typo3AiChat\Service;
 
 use TYPO3\CMS\Core\Core\Environment;
 

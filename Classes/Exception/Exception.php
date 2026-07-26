@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Exception;
+namespace Webconsulting\Typo3AiChat\Exception;
 
 use RuntimeException;
 
 /**
- * Base exception for the NR MCP Agent extension.
+ * Base exception for the TYPO3 AI Chat extension.
  */
 class Exception extends RuntimeException {}

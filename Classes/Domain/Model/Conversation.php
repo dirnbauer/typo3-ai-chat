@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Domain\Model;
+namespace Webconsulting\Typo3AiChat\Domain\Model;
 
 use DateTimeImmutable;
 use DateTimeInterface;
-use Netresearch\NrMcpAgent\Enum\ConversationStatus;
-use Netresearch\NrMcpAgent\Enum\MessageRole;
+use Webconsulting\Typo3AiChat\Enum\ConversationStatus;
+use Webconsulting\Typo3AiChat\Enum\MessageRole;
 
 /**
  * Simple DTO/Value Object — no Extbase, no AbstractEntity.
@@ -22,6 +22,10 @@ final class Conversation
     private int $messageCount = 0;
     private string $status = 'idle';
     private string $currentRequestId = '';
+    private string $runUuid = '';
+    private string $executionTrace = '';
+    private string $pendingApproval = '';
+    private int $flueRunUid = 0;
     private string $systemPrompt = '';
     private bool $archived = false;
     private bool $pinned = false;
@@ -45,6 +49,10 @@ final class Conversation
         $conversation->messageCount = (int) self::val($row, 'message_count', 0);
         $conversation->status = (string) self::val($row, 'status', 'idle');
         $conversation->currentRequestId = (string) self::val($row, 'current_request_id', '');
+        $conversation->runUuid = (string) self::val($row, 'run_uuid', '');
+        $conversation->executionTrace = (string) self::val($row, 'execution_trace', '');
+        $conversation->pendingApproval = (string) self::val($row, 'pending_approval', '');
+        $conversation->flueRunUid = (int) self::val($row, 'flue_run_uid', 0);
         $conversation->systemPrompt = (string) self::val($row, 'system_prompt', '');
         $conversation->archived = (bool) self::val($row, 'archived', false);
         $conversation->pinned = (bool) self::val($row, 'pinned', false);
@@ -77,6 +85,10 @@ final class Conversation
             'message_count' => $this->messageCount,
             'status' => $this->status,
             'current_request_id' => $this->currentRequestId,
+            'run_uuid' => $this->runUuid,
+            'execution_trace' => $this->executionTrace,
+            'pending_approval' => $this->pendingApproval,
+            'flue_run_uid' => $this->flueRunUid,
             'system_prompt' => $this->systemPrompt,
             'archived' => (int) $this->archived,
             'pinned' => (int) $this->pinned,
@@ -192,6 +204,50 @@ final class Conversation
         $this->currentRequestId = $id;
     }
 
+    public function getRunUuid(): string
+    {
+        return $this->runUuid;
+    }
+
+    public function setRunUuid(string $runUuid): void
+    {
+        $this->runUuid = mb_substr($runUuid, 0, 64);
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function getExecutionTrace(): array
+    {
+        return $this->decodeList($this->executionTrace);
+    }
+
+    /** @param list<array<string, mixed>> $trace */
+    public function setExecutionTrace(array $trace): void
+    {
+        $this->executionTrace = json_encode($trace, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function getPendingApproval(): array
+    {
+        return $this->decodeList($this->pendingApproval);
+    }
+
+    /** @param list<array<string, mixed>> $pending */
+    public function setPendingApproval(array $pending): void
+    {
+        $this->pendingApproval = json_encode($pending, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
+    }
+
+    public function getFlueRunUid(): int
+    {
+        return $this->flueRunUid;
+    }
+
+    public function setFlueRunUid(int $runUid): void
+    {
+        $this->flueRunUid = max(0, $runUid);
+    }
+
     public function getSystemPrompt(): string
     {
         return $this->systemPrompt;
@@ -253,5 +309,34 @@ final class Conversation
             [ConversationStatus::Processing, ConversationStatus::ToolLoop, ConversationStatus::Failed],
             true,
         );
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function decodeList(string $json): array
+    {
+        if ($json === '') {
+            return [];
+        }
+
+        $decoded = json_decode($json, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $result = [];
+        foreach ($decoded as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $normalized = [];
+            foreach ($item as $key => $value) {
+                if (is_string($key)) {
+                    $normalized[$key] = $value;
+                }
+            }
+            $result[] = $normalized;
+        }
+
+        return $result;
     }
 }

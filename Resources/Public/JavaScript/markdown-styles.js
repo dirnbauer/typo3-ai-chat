@@ -6,7 +6,7 @@ import {css} from 'lit';
  *
  * Color-scheme neutral: structural tints are derived from currentColor
  * via color-mix() so they adapt to light and dark backend schemes; the
- * link color uses the shared --nr-chat-link token (see theme.js).
+ * link color uses the shared --wc-chat-link token (see theme.js).
  */
 export const markdownStyles = css`
     .message.assistant p { margin: 0 0 6px; }
@@ -39,5 +39,5 @@ export const markdownStyles = css`
         border: 1px solid color-mix(in srgb, currentColor 15%, transparent); padding: 3px 8px; text-align: left;
     }
     .message.assistant th { background: color-mix(in srgb, currentColor 6%, transparent); font-weight: 600; }
-    .message.assistant a { color: var(--nr-chat-link, #0078d4); text-decoration: underline; }
+    .message.assistant a { color: var(--wc-chat-link, #0078d4); text-decoration: underline; }
 `;

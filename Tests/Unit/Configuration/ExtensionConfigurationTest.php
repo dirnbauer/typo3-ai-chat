@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Tests\Unit\Configuration;
+namespace Webconsulting\Typo3AiChat\Tests\Unit\Configuration;
 
-use Netresearch\NrMcpAgent\Configuration\ExtensionConfiguration;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use TYPO3\CMS\Core\Configuration\ExtensionConfiguration as Typo3ExtensionConfiguration;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use Webconsulting\Typo3AiChat\Configuration\ExtensionConfiguration;
 
 class ExtensionConfigurationTest extends TestCase
 {
@@ -18,7 +18,7 @@ class ExtensionConfigurationTest extends TestCase
         parent::setUp();
         // Provide a mock for GeneralUtility::makeInstance
         $mock = $this->createMock(Typo3ExtensionConfiguration::class);
-        $mock->method('get')->with('nr_mcp_agent')->willReturn([
+        $mock->method('get')->with('webconsulting_ai_chat')->willReturn([
             'llmTaskUid' => '42',
             'processingStrategy' => 'worker',
             'allowedGroups' => '1,3,5',
@@ -59,7 +59,7 @@ class ExtensionConfigurationTest extends TestCase
         GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
 
         $mock = $this->createMock(Typo3ExtensionConfiguration::class);
-        $mock->method('get')->with('nr_mcp_agent')->willReturn([
+        $mock->method('get')->with('webconsulting_ai_chat')->willReturn([
             'enableMcp' => '1',
         ]);
         GeneralUtility::addInstance(Typo3ExtensionConfiguration::class, $mock);
@@ -75,7 +75,7 @@ class ExtensionConfigurationTest extends TestCase
         GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
 
         $mock = $this->createMock(Typo3ExtensionConfiguration::class);
-        $mock->method('get')->with('nr_mcp_agent')->willReturn([
+        $mock->method('get')->with('webconsulting_ai_chat')->willReturn([
             'enableMcp' => '0',
         ]);
         GeneralUtility::addInstance(Typo3ExtensionConfiguration::class, $mock);
@@ -91,7 +91,7 @@ class ExtensionConfigurationTest extends TestCase
         GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
 
         $mock = $this->createMock(Typo3ExtensionConfiguration::class);
-        $mock->method('get')->with('nr_mcp_agent')->willReturn([
+        $mock->method('get')->with('webconsulting_ai_chat')->willReturn([
             'maxConversationsPerUser' => '100',
         ]);
         GeneralUtility::addInstance(Typo3ExtensionConfiguration::class, $mock);
@@ -107,7 +107,7 @@ class ExtensionConfigurationTest extends TestCase
         GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
 
         $mock = $this->createMock(Typo3ExtensionConfiguration::class);
-        $mock->method('get')->with('nr_mcp_agent')->willReturn([
+        $mock->method('get')->with('webconsulting_ai_chat')->willReturn([
             'autoArchiveDays' => '60',
         ]);
         GeneralUtility::addInstance(Typo3ExtensionConfiguration::class, $mock);
@@ -123,7 +123,7 @@ class ExtensionConfigurationTest extends TestCase
         GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
 
         $mock = $this->createMock(Typo3ExtensionConfiguration::class);
-        $mock->method('get')->with('nr_mcp_agent')->willReturn([]);
+        $mock->method('get')->with('webconsulting_ai_chat')->willReturn([]);
         GeneralUtility::addInstance(Typo3ExtensionConfiguration::class, $mock);
 
         $config = new ExtensionConfiguration();
@@ -137,7 +137,7 @@ class ExtensionConfigurationTest extends TestCase
         GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
 
         $mock = $this->createMock(Typo3ExtensionConfiguration::class);
-        $mock->method('get')->with('nr_mcp_agent')->willReturn([]);
+        $mock->method('get')->with('webconsulting_ai_chat')->willReturn([]);
         GeneralUtility::addInstance(Typo3ExtensionConfiguration::class, $mock);
 
         $config = new ExtensionConfiguration();
@@ -151,7 +151,7 @@ class ExtensionConfigurationTest extends TestCase
         GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
 
         $mock = $this->createMock(Typo3ExtensionConfiguration::class);
-        $mock->method('get')->with('nr_mcp_agent')->willReturn([
+        $mock->method('get')->with('webconsulting_ai_chat')->willReturn([
             'mcpServerArgs' => 'mcp:server',
         ]);
         GeneralUtility::addInstance(Typo3ExtensionConfiguration::class, $mock);
@@ -174,7 +174,7 @@ class ExtensionConfigurationTest extends TestCase
         GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
 
         $mock = $this->createMock(Typo3ExtensionConfiguration::class);
-        $mock->method('get')->with('nr_mcp_agent')->willReturn([]);
+        $mock->method('get')->with('webconsulting_ai_chat')->willReturn([]);
         GeneralUtility::addInstance(Typo3ExtensionConfiguration::class, $mock);
 
         $config = new ExtensionConfiguration();
@@ -214,7 +214,7 @@ class ExtensionConfigurationTest extends TestCase
         GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
 
         $mock = $this->createMock(Typo3ExtensionConfiguration::class);
-        $mock->method('get')->with('nr_mcp_agent')->willReturn([
+        $mock->method('get')->with('webconsulting_ai_chat')->willReturn([
             'allowedGroups' => '42',
         ]);
         GeneralUtility::addInstance(Typo3ExtensionConfiguration::class, $mock);
@@ -230,7 +230,7 @@ class ExtensionConfigurationTest extends TestCase
         GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
 
         $mock = $this->createMock(Typo3ExtensionConfiguration::class);
-        $mock->method('get')->with('nr_mcp_agent')->willReturn([
+        $mock->method('get')->with('webconsulting_ai_chat')->willReturn([
             'mcpServerCommand' => '',
             'mcpServerArgs' => '',
         ]);
@@ -247,7 +247,7 @@ class ExtensionConfigurationTest extends TestCase
         GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
 
         $mock = $this->createMock(Typo3ExtensionConfiguration::class);
-        $mock->method('get')->with('nr_mcp_agent')->willReturn([
+        $mock->method('get')->with('webconsulting_ai_chat')->willReturn([
             'llmTaskUid' => ['nested' => 'array'],
             'maxMessageLength' => new stdClass(),
         ]);

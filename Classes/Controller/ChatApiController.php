@@ -2,29 +2,31 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Controller;
+namespace Webconsulting\Typo3AiChat\Controller;
 
 use DateTimeImmutable;
 use DateTimeInterface;
 use Exception;
 use finfo;
-use Netresearch\NrMcpAgent\Configuration\ExtensionConfiguration;
-use Netresearch\NrMcpAgent\Document\DocumentExtractorRegistry;
-use Netresearch\NrMcpAgent\Domain\Model\Conversation;
-use Netresearch\NrMcpAgent\Domain\Repository\ConversationRepository;
-use Netresearch\NrMcpAgent\Enum\ConversationStatus;
-use Netresearch\NrMcpAgent\Enum\MessageRole;
-use Netresearch\NrMcpAgent\Service\ChatCapabilitiesInterface;
-use Netresearch\NrMcpAgent\Service\ChatProcessorInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use RuntimeException;
+use Throwable;
 use TYPO3\CMS\Core\Http\JsonResponse;
 use TYPO3\CMS\Core\Resource\Folder;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
 use TYPO3\CMS\Core\Resource\ResourceStorage;
 use TYPO3\CMS\Core\Resource\StorageRepository;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use Webconsulting\Typo3AiChat\Configuration\ExtensionConfiguration;
+use Webconsulting\Typo3AiChat\Document\DocumentExtractorRegistry;
+use Webconsulting\Typo3AiChat\Domain\Model\Conversation;
+use Webconsulting\Typo3AiChat\Domain\Repository\ConversationRepository;
+use Webconsulting\Typo3AiChat\Enum\ConversationStatus;
+use Webconsulting\Typo3AiChat\Enum\MessageRole;
+use Webconsulting\Typo3AiChat\Service\ChatCapabilitiesInterface;
+use Webconsulting\Typo3AiChat\Service\ChatProcessorInterface;
+use Webconsulting\Typo3AiChat\Service\FlueWorkflowBridge;
 
 final readonly class ChatApiController
 {
@@ -39,6 +41,7 @@ final readonly class ChatApiController
         private ResourceFactory $resourceFactory,
         private StorageRepository $storageRepository,
         private DocumentExtractorRegistry $documentExtractorRegistry,
+        private ?FlueWorkflowBridge $flueWorkflowBridge = null,
     ) {}
 
     /**
@@ -63,6 +66,8 @@ final readonly class ChatApiController
         return new JsonResponse([
             'available' => $taskUid > 0,
             'mcpEnabled' => $mcpEnabled,
+            'flueAvailable' => $this->flueWorkflowBridge?->isAvailable() ?? false,
+            'flueFlowUid' => $this->config->getFlueFlowUid(),
             'activeConversationCount' => $this->repository->countActiveByBeUser($this->getBeUserUid()),
             'issues' => $issues,
             ...$capabilities,
@@ -87,6 +92,9 @@ final readonly class ChatApiController
             'pinned' => $c->isPinned(),
             'resumable' => $c->isResumable(),
             'errorMessage' => $c->getErrorMessage(),
+            'runUuid' => $c->getRunUuid(),
+            'pendingApproval' => $c->getPendingApproval(),
+            'flueRunUid' => $c->getFlueRunUid(),
             'tstamp' => $c->getTstamp(),
         ], $conversations);
         return new JsonResponse(['conversations' => $items]);
@@ -136,6 +144,10 @@ final readonly class ChatApiController
                     'messages' => [],
                     'totalCount' => $meta['message_count'],
                     'errorMessage' => $meta['error_message'],
+                    'runUuid' => $meta['run_uuid'] ?? '',
+                    'pendingApproval' => $this->decodeJsonList($meta['pending_approval'] ?? ''),
+                    'executionTrace' => $this->decodeJsonList($meta['execution_trace'] ?? ''),
+                    'flueRunUid' => $meta['flue_run_uid'] ?? 0,
                 ]);
             }
         }
@@ -153,6 +165,10 @@ final readonly class ChatApiController
             'messages' => $newMessages,
             'totalCount' => count($messages),
             'errorMessage' => $conversation->getErrorMessage(),
+            'runUuid' => $conversation->getRunUuid(),
+            'pendingApproval' => $conversation->getPendingApproval(),
+            'executionTrace' => $conversation->getExecutionTrace(),
+            'flueRunUid' => $conversation->getFlueRunUid(),
         ]);
     }
 
@@ -172,7 +188,8 @@ final readonly class ChatApiController
             return $conversation;
         }
 
-        $content = trim((string) ($body['content'] ?? ''));
+        $contentValue = $body['content'] ?? null;
+        $content = is_string($contentValue) ? trim($contentValue) : '';
 
         if ($content === '') {
             return new JsonResponse(['error' => 'Empty message'], 400);
@@ -183,30 +200,49 @@ final readonly class ChatApiController
             return new JsonResponse(['error' => sprintf('Message too long (max %d characters)', $maxLength)], 400);
         }
 
-        $fileUid = isset($body['fileUid']) ? (int) $body['fileUid'] : null;
-        $fileName = null;
-        $fileMimeType = null;
-
-        if ($fileUid !== null) {
-            $existingFileCount = $this->countFilesInConversation($conversation);
-            if ($existingFileCount >= 5) {
-                return new JsonResponse(['error' => 'Maximum 5 files per conversation reached'], 400);
+        $requestedFileUids = [];
+        if (isset($body['fileUids']) && is_array($body['fileUids'])) {
+            foreach ($body['fileUids'] as $requestedFileUid) {
+                $fileUid = $this->positiveInteger($requestedFileUid);
+                if ($fileUid > 0) {
+                    $requestedFileUids[] = $fileUid;
+                }
             }
+            $requestedFileUids = array_values(array_unique($requestedFileUids));
+        } elseif (isset($body['fileUid'])) {
+            $requestedFileUids = [$this->positiveInteger($body['fileUid'])];
+        }
+        $requestedFileUids = array_values(array_filter($requestedFileUids, static fn(int $uid): bool => $uid > 0));
 
+        if ($this->countFilesInConversation($conversation) + count($requestedFileUids) > 5) {
+            return new JsonResponse(['error' => 'Maximum 5 files per conversation reached'], 400);
+        }
+
+        $attachments = [];
+        foreach ($requestedFileUids as $fileUid) {
             try {
                 $file = $this->resourceFactory->getFileObject($fileUid);
                 if (!$file->checkActionPermission('read')) {
                     return new JsonResponse(['error' => self::ERROR_FILE_NOT_FOUND], 404);
                 }
-                $fileName = $file->getName();
-                $fileMimeType = $file->getMimeType();
+                $attachments[] = [
+                    'fileUid' => $fileUid,
+                    'fileName' => $file->getName(),
+                    'fileMimeType' => $file->getMimeType(),
+                ];
             } catch (Exception) {
                 return new JsonResponse(['error' => self::ERROR_FILE_NOT_FOUND], 404);
             }
         }
 
         $currentStatus = $conversation->getStatus();
-        if (in_array($currentStatus, [ConversationStatus::Processing, ConversationStatus::Locked, ConversationStatus::ToolLoop], true)
+        if (in_array($currentStatus, [
+            ConversationStatus::Processing,
+            ConversationStatus::Locked,
+            ConversationStatus::ToolLoop,
+            ConversationStatus::AwaitingApproval,
+            ConversationStatus::FlueRunning,
+        ], true)
         ) {
             return new JsonResponse(['error' => self::ERROR_CONVERSATION_PROCESSING], 409);
         }
@@ -219,16 +255,20 @@ final readonly class ChatApiController
             }
         }
 
-        if ($fileUid !== null) {
+        if ($attachments !== []) {
             $messages = $conversation->getDecodedMessages();
-            $messages[] = [
+            $message = [
                 'role' => MessageRole::User->value,
                 'content' => $content,
-                'fileUid' => $fileUid,
-                'fileName' => $fileName,
-                'fileMimeType' => $fileMimeType,
+                'attachments' => $attachments,
                 'createdAt' => (new DateTimeImmutable())->format(DateTimeInterface::ATOM),
             ];
+            if (count($attachments) === 1) {
+                $message['fileUid'] = $attachments[0]['fileUid'];
+                $message['fileName'] = $attachments[0]['fileName'];
+                $message['fileMimeType'] = $attachments[0]['fileMimeType'];
+            }
+            $messages[] = $message;
             $conversation->setMessages($messages);
             if ($conversation->getTitle() === '') {
                 $conversation->setTitle($content);
@@ -365,7 +405,11 @@ final readonly class ChatApiController
             return new JsonResponse(['error' => 'Access denied'], 403);
         }
 
-        if (!in_array($file->getExtension(), $this->documentExtractorRegistry->getAvailableExtensions(), true)) {
+        $supported = array_values(array_unique(array_merge(
+            $this->chatService->getProviderCapabilities()['supportedFormats'],
+            $this->documentExtractorRegistry->getAvailableExtensions(),
+        )));
+        if (!in_array(strtolower($file->getExtension()), $supported, true)) {
             return new JsonResponse(['error' => 'Unsupported file type'], 422);
         }
 
@@ -410,6 +454,120 @@ final readonly class ChatApiController
         $this->processor->dispatch($conversation->getUid());
 
         return new JsonResponse(['status' => 'processing'], 202);
+    }
+
+    /**
+     * POST /ai-chat/conversations/approval
+     */
+    public function decideApproval(ServerRequestInterface $request): ResponseInterface
+    {
+        $accessDenied = $this->checkAccess();
+        if ($accessDenied !== null) {
+            return $accessDenied;
+        }
+
+        $body = $this->parseBody($request);
+        $conversation = $this->findConversationOrFail($request, $body);
+        if ($conversation instanceof ResponseInterface) {
+            return $conversation;
+        }
+        if ($conversation->getStatus() !== ConversationStatus::AwaitingApproval) {
+            return new JsonResponse(['error' => 'Conversation is not awaiting approval'], 409);
+        }
+
+        try {
+            $this->chatService->decideApproval(
+                $conversation,
+                ($body['approved'] ?? false) === true,
+                $this->getBeUserUid(),
+            );
+        } catch (Throwable $exception) {
+            return new JsonResponse(['error' => $exception->getMessage()], 409);
+        }
+
+        return new JsonResponse(['status' => $conversation->getStatus()->value]);
+    }
+
+    /**
+     * POST /ai-chat/flue/trigger
+     */
+    public function triggerFlue(ServerRequestInterface $request): ResponseInterface
+    {
+        $accessDenied = $this->checkAccess();
+        if ($accessDenied !== null) {
+            return $accessDenied;
+        }
+
+        $body = $this->parseBody($request);
+        $conversation = $this->findConversationOrFail($request, $body);
+        if ($conversation instanceof ResponseInterface) {
+            return $conversation;
+        }
+
+        $contentValue = $body['content'] ?? null;
+        $content = is_string($contentValue) ? trim($contentValue) : '';
+        $pageUid = $this->positiveInteger($body['pageUid'] ?? null);
+        if ($content === '') {
+            return new JsonResponse(['error' => 'Empty workflow request'], 400);
+        }
+        if ($conversation->getStatus() !== ConversationStatus::Idle
+            && $conversation->getStatus() !== ConversationStatus::Failed
+        ) {
+            return new JsonResponse(['error' => self::ERROR_CONVERSATION_PROCESSING], 409);
+        }
+        if ($this->flueWorkflowBridge === null) {
+            return new JsonResponse(['error' => 'Flue is not available.'], 409);
+        }
+
+        try {
+            $result = $this->flueWorkflowBridge->trigger(
+                $conversation,
+                $content,
+                $pageUid,
+                (int) ($this->getBackendUser()['workspace_id'] ?? 0),
+                $this->getBeUserUid(),
+            );
+        } catch (Throwable $exception) {
+            return new JsonResponse(['error' => $exception->getMessage()], 409);
+        }
+
+        return new JsonResponse($result, 202);
+    }
+
+    /**
+     * GET /ai-chat/flue/status?conversationUid={uid}
+     */
+    public function flueStatus(ServerRequestInterface $request): ResponseInterface
+    {
+        $accessDenied = $this->checkAccess();
+        if ($accessDenied !== null) {
+            return $accessDenied;
+        }
+
+        $conversation = $this->findConversationOrFail($request);
+        if ($conversation instanceof ResponseInterface) {
+            return $conversation;
+        }
+        if ($this->flueWorkflowBridge === null) {
+            return new JsonResponse(['error' => 'Flue is not available.'], 409);
+        }
+
+        try {
+            $flue = $this->flueWorkflowBridge->synchronize($conversation);
+        } catch (Throwable $exception) {
+            return new JsonResponse(['error' => $exception->getMessage()], 409);
+        }
+
+        return new JsonResponse([
+            'flue' => $flue,
+            'status' => $conversation->getStatus()->value,
+            'messages' => $conversation->getDecodedMessages(),
+            'totalCount' => $conversation->getMessageCount(),
+            'errorMessage' => $conversation->getErrorMessage(),
+            'executionTrace' => $conversation->getExecutionTrace(),
+            'pendingApproval' => $conversation->getPendingApproval(),
+            'flueRunUid' => $conversation->getFlueRunUid(),
+        ]);
     }
 
     /**
@@ -471,7 +629,8 @@ final readonly class ChatApiController
             return $conversation;
         }
 
-        $title = trim((string) ($body['title'] ?? ''));
+        $titleValue = $body['title'] ?? null;
+        $title = is_string($titleValue) ? trim($titleValue) : '';
         if ($title === '') {
             return new JsonResponse(['error' => 'Title must not be empty'], 400);
         }
@@ -482,14 +641,14 @@ final readonly class ChatApiController
     }
 
     /**
-     * @param array<string, string|int>|null $parsedBody
+     * @param array<string, mixed>|null $parsedBody
      */
     private function findConversationOrFail(ServerRequestInterface $request, ?array $parsedBody = null): Conversation|ResponseInterface
     {
         $body = $parsedBody ?? $this->parseBody($request);
         /** @var array<string, string> $queryParams */
         $queryParams = $request->getQueryParams();
-        $uid = (int) ($queryParams['conversationUid'] ?? $body['conversationUid'] ?? 0);
+        $uid = $this->positiveInteger($queryParams['conversationUid'] ?? $body['conversationUid'] ?? null);
 
         $conversation = $this->repository->findOneByUidAndBeUser($uid, $this->getBeUserUid());
 
@@ -527,11 +686,11 @@ final readonly class ChatApiController
     }
 
     /**
-     * @return array<string, string|int>
+     * @return array<string, mixed>
      */
     private function parseBody(ServerRequestInterface $request): array
     {
-        /** @var array<string, string|int> $body */
+        /** @var array<string, mixed> $body */
         $body = json_decode((string) $request->getBody(), true) ?? [];
         return $body;
     }
@@ -544,12 +703,21 @@ final readonly class ChatApiController
     private function countFilesInConversation(Conversation $conversation): int
     {
         $messages = $conversation->getDecodedMessages();
-        return count(array_filter($messages, static fn(array $msg): bool => isset($msg['fileUid'])));
+        $count = 0;
+        foreach ($messages as $message) {
+            if (isset($message['attachments']) && is_array($message['attachments'])) {
+                $count += count($message['attachments']);
+            } elseif (isset($message['fileUid'])) {
+                ++$count;
+            }
+        }
+
+        return $count;
     }
 
     private function getOrCreateUploadFolder(ResourceStorage $storage, int $beUserUid): Folder
     {
-        $basePath = 'ai-chat/' . $beUserUid;
+        $basePath = 'typo3-ai-chat/' . $beUserUid;
         if (!$storage->hasFolder($basePath)) {
             return $storage->createFolder($basePath);
         }
@@ -565,5 +733,42 @@ final readonly class ChatApiController
         /** @var object{user: array<string, string|int>} $beUser */
         $beUser = $GLOBALS['BE_USER'];
         return $beUser->user;
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function decodeJsonList(string $json): array
+    {
+        $decoded = json_decode($json, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $result = [];
+        foreach ($decoded as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $normalized = [];
+            foreach ($item as $key => $value) {
+                if (is_string($key)) {
+                    $normalized[$key] = $value;
+                }
+            }
+            $result[] = $normalized;
+        }
+
+        return $result;
+    }
+
+    private function positiveInteger(mixed $value): int
+    {
+        if (is_int($value)) {
+            return max(0, $value);
+        }
+        if (is_string($value) && ctype_digit($value)) {
+            return (int) $value;
+        }
+
+        return 0;
     }
 }

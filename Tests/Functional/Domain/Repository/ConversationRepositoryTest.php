@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Tests\Functional\Domain\Repository;
+namespace Webconsulting\Typo3AiChat\Tests\Functional\Domain\Repository;
 
-use Netresearch\NrMcpAgent\Domain\Model\Conversation;
-use Netresearch\NrMcpAgent\Domain\Repository\ConversationRepository;
-use Netresearch\NrMcpAgent\Enum\ConversationStatus;
 use PHPUnit\Framework\Attributes\Test;
 use TYPO3\TestingFramework\Core\Functional\FunctionalTestCase;
+use Webconsulting\Typo3AiChat\Domain\Model\Conversation;
+use Webconsulting\Typo3AiChat\Domain\Repository\ConversationRepository;
+use Webconsulting\Typo3AiChat\Enum\ConversationStatus;
 
 class ConversationRepositoryTest extends FunctionalTestCase
 {
@@ -17,7 +17,7 @@ class ConversationRepositoryTest extends FunctionalTestCase
     protected array $testExtensionsToLoad = [
         'netresearch/nr-vault',
         'netresearch/nr-llm',
-        'netresearch/nr-mcp-agent',
+        'webconsulting/typo3-ai-chat',
     ];
 
     private ConversationRepository $subject;
@@ -26,7 +26,7 @@ class ConversationRepositoryTest extends FunctionalTestCase
     {
         parent::setUp();
         $this->importCSVDataSet(__DIR__ . '/../../Fixtures/be_users.csv');
-        $this->importCSVDataSet(__DIR__ . '/../../Fixtures/tx_nrmcpagent_conversation.csv');
+        $this->importCSVDataSet(__DIR__ . '/../../Fixtures/tx_webconsultingaichat_conversation.csv');
         $this->subject = $this->get(ConversationRepository::class);
     }
 
@@ -186,10 +186,10 @@ class ConversationRepositoryTest extends FunctionalTestCase
     {
         // Conv 5 is deleted
         $conn = $this->get(\TYPO3\CMS\Core\Database\ConnectionPool::class)
-            ->getConnectionForTable('tx_nrmcpagent_conversation');
+            ->getConnectionForTable('tx_webconsultingaichat_conversation');
         // Read the raw row to build a Conversation (findByUid filters deleted rows)
         $row = $conn->executeQuery(
-            'SELECT * FROM tx_nrmcpagent_conversation WHERE uid = 5',
+            'SELECT * FROM tx_webconsultingaichat_conversation WHERE uid = 5',
         )->fetchAssociative();
         self::assertIsArray($row);
 
@@ -212,8 +212,8 @@ class ConversationRepositoryTest extends FunctionalTestCase
 
         // Update tstamp to be older than Conv 2
         $conn = $this->get(\TYPO3\CMS\Core\Database\ConnectionPool::class)
-            ->getConnectionForTable('tx_nrmcpagent_conversation');
-        $conn->update('tx_nrmcpagent_conversation', ['tstamp' => 1700000000], ['uid' => $olderUid]);
+            ->getConnectionForTable('tx_webconsultingaichat_conversation');
+        $conn->update('tx_webconsultingaichat_conversation', ['tstamp' => 1700000000], ['uid' => $olderUid]);
 
         // Dequeue should return the older one first
         $claimed = $this->subject->dequeueForWorker('worker_order');

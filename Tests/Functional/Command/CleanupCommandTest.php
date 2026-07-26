@@ -2,24 +2,24 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Tests\Functional\Command;
+namespace Webconsulting\Typo3AiChat\Tests\Functional\Command;
 
-use Netresearch\NrMcpAgent\Command\CleanupCommand;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Console\Tester\CommandTester;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\TestingFramework\Core\Functional\FunctionalTestCase;
+use Webconsulting\Typo3AiChat\Command\CleanupCommand;
 
 class CleanupCommandTest extends FunctionalTestCase
 {
     protected array $testExtensionsToLoad = [
         'netresearch/nr-vault',
         'netresearch/nr-llm',
-        'netresearch/nr-mcp-agent',
+        'webconsulting/typo3-ai-chat',
     ];
 
-    private const TABLE = 'tx_nrmcpagent_conversation';
+    private const TABLE = 'tx_webconsultingaichat_conversation';
 
     protected function setUp(): void
     {

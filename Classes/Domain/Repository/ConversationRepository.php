@@ -2,19 +2,19 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Domain\Repository;
+namespace Webconsulting\Typo3AiChat\Domain\Repository;
 
-use Netresearch\NrMcpAgent\Domain\Model\Conversation;
-use Netresearch\NrMcpAgent\Enum\ConversationStatus;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
+use Webconsulting\Typo3AiChat\Domain\Model\Conversation;
+use Webconsulting\Typo3AiChat\Enum\ConversationStatus;
 
 /**
  * DBAL-based repository — no Extbase, direct QueryBuilder access.
  */
 readonly class ConversationRepository
 {
-    private const TABLE = 'tx_nrmcpagent_conversation';
+    private const TABLE = 'tx_webconsultingaichat_conversation';
 
     public function __construct(
         private ConnectionPool $connectionPool,
@@ -37,7 +37,8 @@ readonly class ConversationRepository
 
     private const LIST_COLUMNS = [
         'uid', 'be_user', 'title', 'status', 'message_count',
-        'pinned', 'archived', 'error_message', 'tstamp', 'crdate',
+        'pinned', 'archived', 'error_message', 'run_uuid',
+        'pending_approval', 'flue_run_uid', 'tstamp', 'crdate',
     ];
 
     /** @return list<Conversation> */
@@ -84,7 +85,12 @@ readonly class ConversationRepository
             ->where(
                 $qb->expr()->eq('be_user', $qb->createNamedParameter($beUserUid, Connection::PARAM_INT)),
                 $qb->expr()->in('status', $qb->createNamedParameter(
-                    [ConversationStatus::Processing->value, ConversationStatus::Locked->value, ConversationStatus::ToolLoop->value],
+                    [
+                        ConversationStatus::Processing->value,
+                        ConversationStatus::Locked->value,
+                        ConversationStatus::ToolLoop->value,
+                        ConversationStatus::FlueRunning->value,
+                    ],
                     Connection::PARAM_STR_ARRAY,
                 )),
                 $qb->expr()->eq('deleted', $qb->createNamedParameter(0, Connection::PARAM_INT)),
@@ -166,12 +172,20 @@ readonly class ConversationRepository
     /**
      * Lightweight poll check — returns status metadata without loading messages.
      *
-     * @return array{status: string, message_count: int, error_message: string}|null
+     * @return array{status: string, message_count: int, error_message: string, run_uuid: string, pending_approval: string, execution_trace: string, flue_run_uid: int}|null
      */
     public function findPollStatus(int $uid, int $beUserUid): ?array
     {
         $qb = $this->connectionPool->getQueryBuilderForTable(self::TABLE);
-        $row = $qb->select('status', 'message_count', 'error_message')
+        $row = $qb->select(
+            'status',
+            'message_count',
+            'error_message',
+            'run_uuid',
+            'pending_approval',
+            'execution_trace',
+            'flue_run_uid',
+        )
             ->from(self::TABLE)
             ->where(
                 $qb->expr()->eq('uid', $qb->createNamedParameter($uid, Connection::PARAM_INT)),
@@ -188,6 +202,10 @@ readonly class ConversationRepository
         $status = $row['status'] ?? '';
         $messageCount = $row['message_count'] ?? 0;
         $errorMessage = $row['error_message'] ?? '';
+        $runUuid = $row['run_uuid'] ?? '';
+        $pendingApproval = $row['pending_approval'] ?? '';
+        $executionTrace = $row['execution_trace'] ?? '';
+        $flueRunUid = $row['flue_run_uid'] ?? 0;
 
         if (is_int($messageCount)) {
             $messageCountInt = $messageCount;
@@ -199,6 +217,10 @@ readonly class ConversationRepository
             'status' => is_string($status) ? $status : '',
             'message_count' => $messageCountInt,
             'error_message' => is_string($errorMessage) ? $errorMessage : '',
+            'run_uuid' => is_string($runUuid) ? $runUuid : '',
+            'pending_approval' => is_string($pendingApproval) ? $pendingApproval : '',
+            'execution_trace' => is_string($executionTrace) ? $executionTrace : '',
+            'flue_run_uid' => is_numeric($flueRunUid) ? (int) $flueRunUid : 0,
         ];
     }
 

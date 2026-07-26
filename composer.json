@@ -1,6 +1,6 @@
 {
-    "name": "netresearch/nr-mcp-agent",
-    "description": "AI chat assistant for the TYPO3 backend using nr-llm and MCP server",
+    "name": "webconsulting/typo3-ai-chat",
+    "description": "Modern governed AI operator chat for TYPO3, built with nr-llm, MCP and optional Flue workflows",
     "license": "GPL-2.0-or-later",
     "type": "typo3-cms-extension",
     "keywords": [
@@ -14,15 +14,20 @@
     ],
     "authors": [
         {
+            "name": "Webconsulting",
+            "homepage": "https://github.com/dirnbauer",
+            "role": "Maintainer"
+        },
+        {
             "name": "Netresearch DTT GmbH",
             "homepage": "https://www.netresearch.de/",
-            "role": "Developer"
+            "role": "Original nr-mcp-agent authors — with our sincere thanks"
         }
     ],
-    "homepage": "https://github.com/netresearch/t3x-nr-mcp-agent",
+    "homepage": "https://github.com/dirnbauer/typo3-ai-chat",
     "support": {
-        "issues": "https://github.com/netresearch/t3x-nr-mcp-agent/issues",
-        "source": "https://github.com/netresearch/t3x-nr-mcp-agent"
+        "issues": "https://github.com/dirnbauer/typo3-ai-chat/issues",
+        "source": "https://github.com/dirnbauer/typo3-ai-chat"
     },
     "minimum-stability": "dev",
     "prefer-stable": true,
@@ -49,16 +54,17 @@
     "suggest": {
         "netresearch/nr-vault": "For secure API key storage (^0.4)",
         "hn/typo3-mcp-server": "For TYPO3 content management tools (^1.0)",
+        "webconsulting/flue": "For durable, draft-workspace TYPO3 agent workflows",
         "phpoffice/phpspreadsheet": "^3.0 — Required for XLSX upload support"
     },
     "autoload": {
         "psr-4": {
-            "Netresearch\\NrMcpAgent\\": "Classes/"
+            "Webconsulting\\Typo3AiChat\\": "Classes/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Netresearch\\NrMcpAgent\\Tests\\": "Tests/"
+            "Webconsulting\\Typo3AiChat\\Tests\\": "Tests/"
         }
     },
     "config": {
@@ -81,7 +87,7 @@
             "config": "Build/captainhook.json"
         },
         "typo3/cms": {
-            "extension-key": "nr_mcp_agent",
+            "extension-key": "webconsulting_ai_chat",
             "web-dir": ".Build/Web"
         }
     },

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Enum;
+namespace Webconsulting\Typo3AiChat\Enum;
 
 enum ConversationStatus: string
 {
@@ -10,5 +10,7 @@ enum ConversationStatus: string
     case Processing = 'processing';
     case Locked = 'locked';
     case ToolLoop = 'tool_loop';
+    case AwaitingApproval = 'awaiting_approval';
+    case FlueRunning = 'flue_running';
     case Failed = 'failed';
 }

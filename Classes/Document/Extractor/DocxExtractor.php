@@ -2,10 +2,8 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Document\Extractor;
+namespace Webconsulting\Typo3AiChat\Document\Extractor;
 
-use Netresearch\NrMcpAgent\Document\DocumentExtractorInterface;
-use Netresearch\NrMcpAgent\Exception\DocumentExtractionException;
 use PhpOffice\PhpWord\Element\AbstractElement;
 use PhpOffice\PhpWord\Element\Section;
 use PhpOffice\PhpWord\Element\Text;
@@ -13,6 +11,8 @@ use PhpOffice\PhpWord\Element\TextRun;
 use PhpOffice\PhpWord\IOFactory;
 use PhpOffice\PhpWord\PhpWord;
 use Throwable;
+use Webconsulting\Typo3AiChat\Document\DocumentExtractorInterface;
+use Webconsulting\Typo3AiChat\Exception\DocumentExtractionException;
 
 final class DocxExtractor implements DocumentExtractorInterface
 {

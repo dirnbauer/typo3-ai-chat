@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Utility;
+namespace Webconsulting\Typo3AiChat\Utility;
 
-use Netresearch\NrMcpAgent\Exception\Exception as NrMcpAgentException;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use Webconsulting\Typo3AiChat\Exception\Exception as Typo3AiChatException;
 
 final class BackendUserInitializer
 {
@@ -28,7 +28,7 @@ final class BackendUserInitializer
             ->fetchAssociative();
 
         if ($userRecord === false) {
-            throw new NrMcpAgentException(sprintf('Backend user %d not found', $userUid));
+            throw new Typo3AiChatException(sprintf('Backend user %d not found', $userUid));
         }
 
         $backendUser->user = $userRecord;

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Configuration;
+namespace Webconsulting\Typo3AiChat\Configuration;
 
 use TYPO3\CMS\Core\Configuration\ExtensionConfiguration as Typo3ExtensionConfiguration;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
@@ -16,7 +16,7 @@ class ExtensionConfiguration
     {
         /** @var array<string, mixed> $config */
         $config = (array) GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class)
-            ->get('nr_mcp_agent');
+            ->get('webconsulting_ai_chat');
         $this->config = $config;
     }
 
@@ -43,6 +43,16 @@ class ExtensionConfiguration
     public function isMcpEnabled(): bool
     {
         return $this->getString('enableMcp', '0') === '1';
+    }
+
+    public function isFlueEnabled(): bool
+    {
+        return $this->getString('enableFlue', '0') === '1';
+    }
+
+    public function getFlueFlowUid(): int
+    {
+        return (int) $this->getString('flueFlowUid', '0');
     }
 
     /**

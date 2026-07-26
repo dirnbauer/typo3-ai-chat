@@ -1,8 +1,8 @@
 services:
   web:
     environment:
-      - EXTENSION_KEY=nr_mcp_agent
-      - PACKAGE_NAME=netresearch/nr-mcp-agent
+      - EXTENSION_KEY=webconsulting_ai_chat
+      - PACKAGE_NAME=webconsulting/typo3-ai-chat
       - NR_MCP_AGENT_LLM_TASK_UID
       - TYPO3_DB_DRIVER=mysqli
       - TYPO3_DB_HOST=db
@@ -14,7 +14,7 @@ services:
       - TYPO3_SETUP_ADMIN_USERNAME=admin
       - TYPO3_SETUP_ADMIN_PASSWORD=Joh316!!
     volumes:
-      - ../:/var/www/nr_mcp_agent:cached
+      - ../:/var/www/webconsulting_ai_chat:cached
       - v13-data:/var/www/html/v13
       - v14-data:/var/www/html/v14
 volumes:

@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Tests\Unit\Backend\ToolbarItems;
+namespace Webconsulting\Typo3AiChat\Tests\Unit\Backend\ToolbarItems;
 
-use Netresearch\NrMcpAgent\Backend\ToolbarItems\ChatToolbarItem;
-use Netresearch\NrMcpAgent\Configuration\ExtensionConfiguration;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use TYPO3\CMS\Backend\Toolbar\RequestAwareToolbarItemInterface;
 use TYPO3\CMS\Backend\Toolbar\ToolbarItemInterface;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Page\PageRenderer;
+use Webconsulting\Typo3AiChat\Backend\ToolbarItems\ChatToolbarItem;
+use Webconsulting\Typo3AiChat\Configuration\ExtensionConfiguration;
 
 class ChatToolbarItemTest extends TestCase
 {
@@ -69,7 +69,7 @@ class ChatToolbarItemTest extends TestCase
     {
         $this->pageRenderer->expects(self::once())
             ->method('loadJavaScriptModule')
-            ->with('@netresearch/nr-mcp-agent/toolbar/chat-panel.js');
+            ->with('@webconsulting/typo3-ai-chat/toolbar/chat-panel.js');
 
         $subject = $this->createSubject();
         $subject->getItem();

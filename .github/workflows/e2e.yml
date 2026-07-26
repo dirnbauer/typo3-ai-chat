@@ -9,7 +9,7 @@ on:
       typo3_base_url:
         description: 'TYPO3 base URL (defaults to DDEV site)'
         required: false
-        default: 'https://v13.nr-mcp-agent.ddev.site:33001'
+        default: 'https://v13.typo3-ai-chat.ddev.site:33001'
 
 jobs:
   e2e:
@@ -63,7 +63,7 @@ jobs:
             --password=typo3 \
             --admin-user-name=admin \
             --admin-password=Admin1234! \
-            --project-name="nr-mcp-agent E2E" \
+            --project-name="typo3-ai-chat E2E" \
             --no-interaction
           .Build/bin/typo3 extension:setup
           .Build/bin/typo3 database:updateschema

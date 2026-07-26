@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Enum;
+namespace Webconsulting\Typo3AiChat\Enum;
 
 enum MessageRole: string
 {

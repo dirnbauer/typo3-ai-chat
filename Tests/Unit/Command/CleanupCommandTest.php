@@ -2,10 +2,8 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Tests\Unit\Command;
+namespace Webconsulting\Typo3AiChat\Tests\Unit\Command;
 
-use Netresearch\NrMcpAgent\Command\CleanupCommand;
-use Netresearch\NrMcpAgent\Configuration\ExtensionConfiguration;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -17,6 +15,8 @@ use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\Expression\ExpressionBuilder;
 use TYPO3\CMS\Core\Database\Query\QueryBuilder;
 use TYPO3\CMS\Core\Database\Query\Restriction\QueryRestrictionContainerInterface;
+use Webconsulting\Typo3AiChat\Command\CleanupCommand;
+use Webconsulting\Typo3AiChat\Configuration\ExtensionConfiguration;
 
 class CleanupCommandTest extends TestCase
 {

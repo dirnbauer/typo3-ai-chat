@@ -35,7 +35,7 @@ Alternatives considered:
 Decision
 ========
 
-Introduce a ``tx_nrmcpagent_mcp_server`` database table. Each record represents
+Introduce a ``tx_webconsultingaichat_mcp_server`` database table. Each record represents
 one MCP server with fields for ``server_key``, ``transport`` (``stdio``/``sse``),
 ``command``, ``arguments``, ``url``, and ``auth_token``. The ``server_key``
 value is used as a prefix for all tool names from that server

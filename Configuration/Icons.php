@@ -9,15 +9,15 @@ use TYPO3\CMS\Core\Information\Typo3Version;
 // three-color module icon that adapts via currentColor. v13 uses the
 // colored (teal tile) variant that matches the classic module menu.
 $moduleIcon = (new Typo3Version())->getMajorVersion() >= 14
-    ? 'EXT:nr_mcp_agent/Resources/Public/Icons/ModuleIcon.svg'
-    : 'EXT:nr_mcp_agent/Resources/Public/Icons/ModuleIcon.legacy.svg';
+    ? 'EXT:webconsulting_ai_chat/Resources/Public/Icons/ModuleIcon.svg'
+    : 'EXT:webconsulting_ai_chat/Resources/Public/Icons/ModuleIcon.legacy.svg';
 
 return [
-    'module-nr-mcp-agent' => [
+    'module-typo3-ai-chat' => [
         'provider' => SvgIconProvider::class,
         'source' => $moduleIcon,
     ],
-    'toolbar-nr-mcp-agent' => [
+    'toolbar-typo3-ai-chat' => [
         'provider' => SvgIconProvider::class,
         'source' => $moduleIcon,
     ],

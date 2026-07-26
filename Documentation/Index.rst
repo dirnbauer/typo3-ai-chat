@@ -5,10 +5,10 @@ AI Chat for TYPO3
 ====================
 
 :Extension key:
-    nr_mcp_agent
+    webconsulting_ai_chat
 
 :Package name:
-    netresearch/nr-mcp-agent
+    webconsulting/typo3-ai-chat
 
 :Version:
     |release|
@@ -17,7 +17,7 @@ AI Chat for TYPO3
     en
 
 :Author:
-    Netresearch DTT GmbH
+    Webconsulting; inspired by Netresearch DTT GmbH
 
 :License:
     This document is published under the
@@ -29,11 +29,12 @@ AI Chat for TYPO3
 
 ----
 
-AI Chat integrates a conversational AI assistant into the
-TYPO3 backend. Powered by `nr-llm <https://github.com/
-netresearch/t3x-nr-llm>`__ and the `Model Context Protocol
-(MCP) <https://modelcontextprotocol.io/>`__, it enables
-backend users to manage content through natural language.
+TYPO3 AI Chat is a modern governed operator console powered by
+`nr-llm <https://github.com/netresearch/t3x-nr-llm>`__, optional Flue MCP
+workflows, assistant-ui, and TYPO3's own access controls.
+
+It is derived from Netresearch nr-mcp-agent. Thank you, Netresearch, for the
+original extension and the open TYPO3 AI foundation.
 
 ----
 

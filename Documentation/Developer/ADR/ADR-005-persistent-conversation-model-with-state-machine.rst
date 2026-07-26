@@ -31,7 +31,7 @@ Decision
 ========
 
 Persist conversations and messages in dedicated database tables
-(``tx_nrmcpagent_conversation``, ``tx_nrmcpagent_message``). Messages use a
+(``tx_webconsultingaichat_conversation``, ``tx_webconsultingaichat_message``). Messages use a
 status state machine:
 
 ``pending`` → ``processing`` → ``done`` | ``error``

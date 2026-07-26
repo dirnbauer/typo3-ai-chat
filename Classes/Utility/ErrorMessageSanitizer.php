@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Utility;
+namespace Webconsulting\Typo3AiChat\Utility;
 
 final class ErrorMessageSanitizer
 {

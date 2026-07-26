@@ -3,7 +3,7 @@
 # === Environment ===
 up: start install-all docs  ## Full setup: DDEV + all TYPO3 versions + docs
 	@echo ""
-	@echo "Ready: https://nr-mcp-agent.ddev.site"
+	@echo "Ready: https://typo3-ai-chat.ddev.site"
 
 start:  ## Start DDEV
 	ddev start
@@ -35,19 +35,19 @@ sync:  ## Re-sync extension after code changes
 test: test-unit test-func test-arch  ## Run all PHP tests
 
 test-unit:  ## Run unit tests
-	ddev exec -d /var/www/nr_mcp_agent .Build/bin/phpunit -c Build/phpunit.xml --testsuite unit
+	ddev exec -d /var/www/webconsulting_ai_chat .Build/bin/phpunit -c Build/phpunit.xml --testsuite unit
 
 test-func:  ## Run functional tests
-	ddev exec -d /var/www/nr_mcp_agent .Build/bin/phpunit -c Build/phpunit.xml --testsuite functional
+	ddev exec -d /var/www/webconsulting_ai_chat .Build/bin/phpunit -c Build/phpunit.xml --testsuite functional
 
 test-arch:  ## Run architecture tests (phpat)
-	ddev exec -d /var/www/nr_mcp_agent .Build/bin/phpunit -c Build/phpunit.xml --testsuite architecture
+	ddev exec -d /var/www/webconsulting_ai_chat .Build/bin/phpunit -c Build/phpunit.xml --testsuite architecture
 
 test-js:  ## Run Jest tests (Lit Elements)
-	ddev exec -d /var/www/nr_mcp_agent npx jest --coverage
+	ddev exec -d /var/www/webconsulting_ai_chat npx jest --coverage
 
 test-e2e:  ## Run Playwright E2E tests
-	ddev exec -d /var/www/nr_mcp_agent npx playwright test --config=Build/tests/playwright/playwright.config.ts
+	ddev exec -d /var/www/webconsulting_ai_chat npx playwright test --config=Build/tests/playwright/playwright.config.ts
 
 test-mutation:  ## Run mutation testing (Infection)
 	ddev composer ci:mutation
@@ -55,20 +55,20 @@ test-mutation:  ## Run mutation testing (Infection)
 test-all: test test-js test-e2e  ## Run entire test pyramid
 
 coverage:  ## Generate HTML coverage report
-	ddev exec -d /var/www/nr_mcp_agent .Build/bin/phpunit -c Build/phpunit.xml --coverage-html=.Build/coverage
+	ddev exec -d /var/www/webconsulting_ai_chat .Build/bin/phpunit -c Build/phpunit.xml --coverage-html=.Build/coverage
 
 # === Quality ===
 lint:  ## Check code style
-	ddev exec -d /var/www/nr_mcp_agent .Build/bin/php-cs-fixer fix --dry-run --diff
+	ddev exec -d /var/www/webconsulting_ai_chat .Build/bin/php-cs-fixer fix --dry-run --diff
 
 lint-fix:  ## Fix code style
-	ddev exec -d /var/www/nr_mcp_agent .Build/bin/php-cs-fixer fix
+	ddev exec -d /var/www/webconsulting_ai_chat .Build/bin/php-cs-fixer fix
 
 phpstan:  ## Static analysis
-	ddev exec -d /var/www/nr_mcp_agent .Build/bin/phpstan analyse -c Build/phpstan/phpstan.neon
+	ddev exec -d /var/www/webconsulting_ai_chat .Build/bin/phpstan analyse -c Build/phpstan/phpstan.neon
 
 ci: lint phpstan test test-js  ## Run CI checks (without E2E — those run separately)
 
 # === Documentation ===
 docs:  ## Render documentation
-	ddev exec -d /var/www/nr_mcp_agent docker run --rm -v .:/project ghcr.io/typo3-documentation/render-guides:latest --config=Documentation 2>/dev/null || echo "Docs render requires Docker-in-Docker or local render"
+	ddev exec -d /var/www/webconsulting_ai_chat docker run --rm -v .:/project ghcr.io/typo3-documentation/render-guides:latest --config=Documentation 2>/dev/null || echo "Docs render requires Docker-in-Docker or local render"

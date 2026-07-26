@@ -1,18 +1,18 @@
 /* The AI Chat module renders as a standalone document (the backend module
- * iframe) whose body is just <body><nr-chat-app>. For :host{height:100%} on the
+ * iframe) whose body is just <body><wc-chat-app>. For :host{height:100%} on the
  * component to resolve, html/body must be full height. Scope this with :has()
- * to the standalone case (nr-chat-app is a direct child of body) so it never
+ * to the standalone case (wc-chat-app is a direct child of body) so it never
  * touches a regular backend document where the chat might be embedded deeper. */
-html:has(> body > nr-chat-app) {
+html:has(> body > wc-chat-app) {
     height: 100%;
 }
 
-body:has(> nr-chat-app) {
+body:has(> wc-chat-app) {
     height: 100%;
     margin: 0;
 }
 
-/* Do NOT set display/height on nr-chat-app from here: a light-DOM rule on the
+/* Do NOT set display/height on wc-chat-app from here: a light-DOM rule on the
  * host wins over the component's own `:host { display: flex; height: 100% }`.
  * Setting `display: block` collapsed the inner flex column so `.chat-body`
  * (flex: 1) no longer stretched — the host filled the iframe but the chat body
@@ -21,14 +21,14 @@ body:has(> nr-chat-app) {
 
 /* When embedded inside a regular backend module body (grid 1fr track), let the
  * host fill that track instead of relying on a fixed height. */
-.module[data-module-name="nr_mcp_agent_chat"] .module-body {
+.module[data-module-name="webconsulting_ai_chat_chat"] .module-body {
     padding: 0;
     display: flex;
     flex-direction: column;
     min-height: 0;
 }
 
-.module[data-module-name="nr_mcp_agent_chat"] nr-chat-app {
+.module[data-module-name="webconsulting_ai_chat_chat"] wc-chat-app {
     flex: 1 1 auto;
     min-height: 0;
 }

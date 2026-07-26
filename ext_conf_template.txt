@@ -10,6 +10,12 @@ allowedGroups =
 # cat=basic/mcp; type=boolean; label=Enable MCP Server integration (MCP servers are configured in the List module on PID 0)
 enableMcp = 0
 
+# cat=basic/flue; type=boolean; label=Enable optional Flue durable workflow lane
+enableFlue = 0
+
+# cat=basic/flue; type=int; label=Flue Flow UID used by the chat (recommended: a draft-workspace page-edit flow)
+flueFlowUid = 0
+
 # cat=basic/ui; type=int; label=Max conversations to keep per user (0 = unlimited)
 maxConversationsPerUser = 50
 

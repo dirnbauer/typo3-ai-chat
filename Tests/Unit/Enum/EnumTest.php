@@ -2,19 +2,19 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Tests\Unit\Enum;
+namespace Webconsulting\Typo3AiChat\Tests\Unit\Enum;
 
-use Netresearch\NrMcpAgent\Enum\ConversationStatus;
-use Netresearch\NrMcpAgent\Enum\MessageRole;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use Webconsulting\Typo3AiChat\Enum\ConversationStatus;
+use Webconsulting\Typo3AiChat\Enum\MessageRole;
 
 class EnumTest extends TestCase
 {
     #[Test]
     public function conversationStatusHasAllExpectedCases(): void
     {
-        $expected = ['idle', 'processing', 'locked', 'tool_loop', 'failed'];
+        $expected = ['idle', 'processing', 'locked', 'tool_loop', 'awaiting_approval', 'flue_running', 'failed'];
         $actual = array_map(fn(ConversationStatus $s) => $s->value, ConversationStatus::cases());
         self::assertSame($expected, $actual);
     }
@@ -40,6 +40,8 @@ class EnumTest extends TestCase
         self::assertSame(ConversationStatus::Processing, ConversationStatus::tryFrom('processing'));
         self::assertSame(ConversationStatus::Locked, ConversationStatus::tryFrom('locked'));
         self::assertSame(ConversationStatus::ToolLoop, ConversationStatus::tryFrom('tool_loop'));
+        self::assertSame(ConversationStatus::AwaitingApproval, ConversationStatus::tryFrom('awaiting_approval'));
+        self::assertSame(ConversationStatus::FlueRunning, ConversationStatus::tryFrom('flue_running'));
         self::assertSame(ConversationStatus::Failed, ConversationStatus::tryFrom('failed'));
     }
 

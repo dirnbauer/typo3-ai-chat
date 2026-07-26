@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Mcp;
+namespace Webconsulting\Typo3AiChat\Mcp;
 
 interface McpToolProviderInterface
 {

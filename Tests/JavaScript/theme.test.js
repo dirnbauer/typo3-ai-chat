@@ -47,37 +47,37 @@ describe('shared theme contract', () => {
     const theme = read('theme.js');
 
     test.each([
-        '--nr-chat-surface',
-        '--nr-chat-surface-low',
-        '--nr-chat-surface-base',
-        '--nr-chat-surface-high',
-        '--nr-chat-text',
-        '--nr-chat-text-variant',
-        '--nr-chat-link',
-        '--nr-chat-border',
-        '--nr-chat-input-border',
-        '--nr-chat-hover',
-        '--nr-chat-active',
-        '--nr-chat-accent',
-        '--nr-chat-on-accent',
-        '--nr-chat-accent-hover',
-        '--nr-chat-focus-ring',
-        '--nr-chat-success-bg',
-        '--nr-chat-success-text',
-        '--nr-chat-warning-bg',
-        '--nr-chat-warning-text',
-        '--nr-chat-danger-bg',
-        '--nr-chat-danger-text',
-        '--nr-chat-status-info',
-        '--nr-chat-status-success',
-        '--nr-chat-status-danger',
+        '--wc-chat-surface',
+        '--wc-chat-surface-low',
+        '--wc-chat-surface-base',
+        '--wc-chat-surface-high',
+        '--wc-chat-text',
+        '--wc-chat-text-variant',
+        '--wc-chat-link',
+        '--wc-chat-border',
+        '--wc-chat-input-border',
+        '--wc-chat-hover',
+        '--wc-chat-active',
+        '--wc-chat-accent',
+        '--wc-chat-on-accent',
+        '--wc-chat-accent-hover',
+        '--wc-chat-focus-ring',
+        '--wc-chat-success-bg',
+        '--wc-chat-success-text',
+        '--wc-chat-warning-bg',
+        '--wc-chat-warning-text',
+        '--wc-chat-danger-bg',
+        '--wc-chat-danger-text',
+        '--wc-chat-status-info',
+        '--wc-chat-status-success',
+        '--wc-chat-status-danger',
     ])('theme.js defines %s', (property) => {
         expect(theme).toContain(`${property}:`);
     });
 
     test('theme maps the accent to the scheme-aware TYPO3 primary surface tokens', () => {
-        expect(theme).toContain('--nr-chat-accent: var(--typo3-surface-primary,');
-        expect(theme).toContain('--nr-chat-on-accent: var(--typo3-surface-primary-text,');
+        expect(theme).toContain('--wc-chat-accent: var(--typo3-surface-primary,');
+        expect(theme).toContain('--wc-chat-on-accent: var(--typo3-surface-primary-text,');
     });
 
     test('theme maps status chips to scheme-aware surface-container pairs', () => {
@@ -93,6 +93,6 @@ describe('shared theme contract', () => {
     });
 
     test('markdown link color uses the shared token', () => {
-        expect(read('markdown-styles.js')).toContain('var(--nr-chat-link, #0078d4)');
+        expect(read('markdown-styles.js')).toContain('var(--wc-chat-link, #0078d4)');
     });
 });

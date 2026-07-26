@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * Playwright configuration for nr_mcp_agent E2E tests.
+ * Playwright configuration for webconsulting_ai_chat E2E tests.
  *
  * Run from the HOST against the DDEV TYPO3 v13 instance.
  * Override the base URL via TYPO3_BASE_URL env variable.
@@ -19,7 +19,7 @@ export default defineConfig({
     reporter: [['html', { open: 'never' }]],
     timeout: 30000,
     use: {
-        baseURL: process.env.TYPO3_BASE_URL || 'https://v13.nr-mcp-agent.ddev.site:33001',
+        baseURL: process.env.TYPO3_BASE_URL || 'https://v13.typo3-ai-chat.ddev.site:33001',
         ignoreHTTPSErrors: true,
         screenshot: 'only-on-failure',
         trace: 'on-first-retry',

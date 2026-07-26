@@ -16,7 +16,7 @@ return [
         'adminOnly' => true,
         'rootLevel' => 1,
         'type' => 'transport',
-        'iconfile' => 'EXT:nr_mcp_agent/Resources/Public/Icons/ModuleIcon.svg',
+        'iconfile' => 'EXT:webconsulting_ai_chat/Resources/Public/Icons/ModuleIcon.svg',
         'searchFields' => 'name,server_key',
     ],
     'types' => [

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Mcp;
+namespace Webconsulting\Typo3AiChat\Mcp;
 
-use Netresearch\NrMcpAgent\Exception\McpException;
 use stdClass;
+use Webconsulting\Typo3AiChat\Exception\McpException;
 
 final class McpConnection
 {
@@ -56,7 +56,7 @@ final class McpConnection
             'protocolVersion' => '2024-11-05',
             'capabilities' => new stdClass(),
             'clientInfo' => [
-                'name' => 'nr-mcp-agent',
+                'name' => 'typo3-ai-chat',
                 'version' => '0.1.0',
             ],
         ], $timeoutSeconds);

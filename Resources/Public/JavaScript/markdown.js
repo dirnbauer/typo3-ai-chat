@@ -5,7 +5,7 @@
  * Both are vendored in Resources/Public/JavaScript/Vendor/ and registered
  * in the TYPO3 importmap (Configuration/JavaScriptModules.php).
  *
- * @module @netresearch/nr-mcp-agent/markdown
+ * @module @webconsulting/typo3-ai-chat/markdown
  */
 
 import {marked} from 'marked';

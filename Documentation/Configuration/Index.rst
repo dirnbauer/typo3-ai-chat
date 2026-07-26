@@ -4,302 +4,105 @@
 Configuration
 =============
 
-All settings are managed via **Admin Tools > Settings >
-Extension Configuration > nr_mcp_agent**.
+Configure the extension under **Admin Tools > Settings > Extension
+Configuration > webconsulting_ai_chat**.
 
-LLM connection
-==============
+LLM and processing
+==================
 
 ..  confval:: llmTaskUid
     :type: int
     :default: 0
 
-    UID of an nr-llm Task record. This Task defines which
-    LLM provider and model to use (e.g. OpenAI GPT-4,
-    Anthropic Claude). **Required** -- the extension will
-    not work without a valid Task UID.
-
-    Create the Task record in the nr-llm backend module
-    first, then enter its UID here.
-
-Processing
-==========
+    UID of the nr-llm Task used by the direct operator lane. Its Configuration
+    selects the provider/model and its prompt becomes part of the agent
+    instruction stack.
 
 ..  confval:: processingStrategy
     :type: string
     :default: exec
 
-    How chat messages are processed in the background:
-
-    ``exec``
-        Forks a CLI process per request
-        (``ai-chat:process``). Simple, no extra setup.
-        Best for development and low-traffic sites.
-
-    ``worker``
-        Uses a long-running worker process
-        (``ai-chat:worker``) that polls for new messages.
-        Better for production -- lower latency, no
-        process forking overhead.
-
-Access control
-==============
-
-..  confval:: allowedGroups
-    :type: string
-    :default: *(empty)*
-
-    Comma-separated list of backend user group UIDs that
-    are allowed to use the AI Chat module. Leave empty
-    to allow all backend users with module access.
-
-MCP integration
-===============
+    ``exec`` starts a bounded CLI process per turn. ``worker`` uses the
+    long-running ``ai-chat:worker`` command.
 
 ..  confval:: enableMcp
     :type: boolean
     :default: false
 
-    Enable MCP (Model Context Protocol) server integration.
+    Retained for MCP server records and compatibility. Interactive execution is
+    governed by nr-llm's tool registry; the optional Flue lane is the durable
+    MCP execution path.
 
-    When enabled, the AI assistant can call tools exposed
-    by any configured MCP server. When disabled, it works
-    as a plain chat without tool access.
+Flue
+====
 
-    MCP servers are configured as records in the TYPO3
-    List module (see *MCP server records* below).
+..  confval:: enableFlue
+    :type: boolean
+    :default: false
 
-MCP server records
-------------------
+    Shows the Flue lane only when ``webconsulting/flue`` is installed.
 
-MCP servers are configured as database records, not via
-extension settings. After enabling MCP:
-
-1.  Open the **TYPO3 List module** and navigate to
-    **pid = 0** (the root page).
-2.  Create a new record of type **MCP Server**.
-3.  Fill in the fields:
-
-    ``Name``
-        Human-readable label (e.g. *TYPO3 MCP Server*).
-
-    ``Server key``
-        Machine identifier used to namespace tools
-        (e.g. ``typo3``). Lowercase letters, digits,
-        and underscores only. Must be unique.
-
-    ``Transport``
-        ``stdio`` (subprocess via stdin/stdout) or
-        ``sse`` (HTTP SSE endpoint — not yet implemented).
-
-    For ``stdio`` transport:
-
-    ``Command``
-        Path to the MCP server binary. Defaults to
-        ``vendor/bin/typo3`` in the project root.
-
-    ``Arguments``
-        One argument per line (e.g. ``mcp:server``).
-
-4.  Save the record. The tool cache is flushed
-    automatically.
-
-Tool names are prefixed with the server key to avoid
-collisions between servers. For example, a tool named
-``ReadTable`` on a server with key ``typo3`` becomes
-``typo3__ReadTable`` in the LLM context.
-
-The connection status fields (read-only) show the
-last known state of each server connection.
-
-Chat panel
-==========
-
-When ``llmTaskUid`` is configured, a chat button appears
-automatically in the TYPO3 backend toolbar (top right).
-Clicking it opens a floating bottom panel that stays visible
-across module navigation.
-
-The panel supports four states:
-
-*   **Hidden** -- Default. Only the toolbar button is visible.
-*   **Collapsed** -- Minimal header bar showing the active
-    conversation title and status.
-*   **Expanded** -- Resizable panel with chat messages, input,
-    and a compact conversation switcher.
-*   **Maximized** -- Full-height panel with a sidebar for
-    conversation management (search, pin, archive).
-
-The panel height and state are persisted per user in the
-browser's localStorage.
-
-System prompt
-=============
-
-The system prompt sent to the LLM is not configured in the
-extension configuration itself, but in the **nr-llm records**:
-
-**Configuration record** (``tx_nrllm_configuration.system_prompt``)
-    The primary system prompt. Set this to define the AI
-    assistant's persona, language, and behavior. Also use
-    this field for tool usage instructions when MCP is
-    enabled.
-
-    Example for MCP usage::
-
-        Du bist ein TYPO3-Assistent.
-
-        ## Tool-Nutzung
-        - Bei WriteTable gehören Record-Felder IMMER in den
-          "data" Parameter als Objekt.
-        - Beispiel: {"action": "create", "table": "pages",
-          "pid": 1, "data": {"title": "Meine Seite"}}
-
-**Task record** (``tx_nrllm_task.prompt_template``)
-    Additional instructions appended after the Configuration
-    prompt. Use this for task-specific context.
-
-When both fields are set, they are combined (separated by a
-blank line). If neither is set, a locale-based default prompt
-is used. A per-conversation ``system_prompt`` field can
-override everything (set programmatically, not via UI).
-
-User interface
-==============
-
-..  confval:: maxConversationsPerUser
+..  confval:: flueFlowUid
     :type: int
-    :default: 50
+    :default: 0
 
-    Maximum number of conversations to keep per user.
-    Set to ``0`` for unlimited. When the limit is reached,
-    the oldest non-pinned conversations are archived
-    automatically.
+    UID of the Flue flow triggered by chat requests. Use a narrow flow whose MCP
+    allowlist matches the desired task. Write-capable flows must use Flue's
+    strict-sandbox backend actor so changes land in a draft workspace.
 
-..  confval:: autoArchiveDays
-    :type: int
-    :default: 30
+Access and limits
+=================
 
-    Automatically archive conversations that have been
-    inactive for this many days. Set to ``0`` to disable
-    auto-archiving.
+..  confval:: allowedGroups
+    :type: string
+    :default: *(empty)*
 
-    Auto-archiving runs via the ``ai-chat:cleanup``
-    command.
-
-File attachments
-================
-
-File attachments are always available — no special provider configuration
-required. Text is extracted server-side for document formats, so they
-work with any LLM provider.
-
-**Always supported (server-side text extraction):**
-
-*   PDF: ``application/pdf`` — requires ``smalot/pdfparser`` (hard dependency)
-*   DOCX: ``application/vnd.openxmlformats-officedocument.wordprocessingml.document``
-    — requires ``phpoffice/phpword`` (hard dependency)
-*   TXT: ``text/plain`` — no dependencies
-*   XLSX: ``application/vnd.openxmlformats-officedocument.spreadsheetml.sheet``
-    — requires ``phpoffice/phpspreadsheet`` (optional; install via
-    ``composer require phpoffice/phpspreadsheet:^3.0``)
-
-**Additionally available for vision-capable providers** (Claude 3+, Gemini,
-GPT-4o, etc.):
-
-*   Images: ``image/png``, ``image/jpeg``, ``image/webp``
-
-When the provider natively handles a document format (e.g. Claude
-natively processes PDFs via ``DocumentCapableInterface``), the file is
-sent as binary instead of being extracted. The file picker automatically
-restricts to formats the active provider can process.
-
-**Storage:** Uploaded files are stored in TYPO3 FAL under
-``fileadmin/ai-chat/<be_user_uid>/``. They are read at LLM call time and
-sent as Base64-encoded multimodal content. Each file is stored in a
-user-specific subfolder; the API enforces that users can only attach their
-own files (cross-user access attempts return 404).
-
-**Limits:**
-
-*   Maximum 5 files per conversation.
-*   Maximum file size: 20 MB per file.
-*   File count is enforced both in the frontend (before upload) and in the
-    backend API.
-
-**Security:** The ``fileadmin/ai-chat/`` directory should be protected
-from direct HTTP access. Add the following to your web server configuration
-or deploy a ``.htaccess`` file to ``fileadmin/ai-chat/``:
-
-..  code-block:: apache
-
-    # fileadmin/ai-chat/.htaccess
-    Require all denied
-
-Security
-========
+    Comma-separated backend group UIDs. Empty means every user with module
+    access; individual tools still enforce TYPO3 permissions.
 
 ..  confval:: maxMessageLength
     :type: int
     :default: 10000
 
-    Maximum length of a single user message in characters.
-    Set to ``0`` for unlimited (not recommended).
-
-    Messages exceeding this limit are rejected with an
-    error.
+    Maximum characters in one request.
 
 ..  confval:: maxActiveConversationsPerUser
     :type: int
     :default: 3
 
-    Maximum number of simultaneously active (processing)
-    conversations per user. Prevents a single user from
-    overloading the system. Set to ``0`` for unlimited.
+    Maximum direct/Flue runs active for one backend user.
 
-Worker mode production setup
-============================
+..  confval:: maxConversationsPerUser
+    :type: int
+    :default: 50
 
-For production use with ``processingStrategy = worker``,
-set up a systemd service to keep the worker running:
+    Conversation retention limit. ``0`` disables the limit.
 
-..  code-block:: ini
+..  confval:: autoArchiveDays
+    :type: int
+    :default: 30
 
-    # /etc/systemd/system/typo3-ai-chat-worker.service
-    [Unit]
-    Description=TYPO3 AI Chat Worker
-    After=mysql.service
+    Age after which unpinned conversations are archived by ``ai-chat:cleanup``.
 
-    [Service]
-    Type=simple
-    User=www-data
-    Group=www-data
-    WorkingDirectory=/var/www/html
-    ExecStart=/var/www/html/vendor/bin/typo3 \
-        ai-chat:worker --poll-interval=200
-    Restart=always
-    RestartSec=5
+Attachment security
+===================
 
-    [Install]
-    WantedBy=multi-user.target
+The endpoint accepts actual MIME types supported by the provider or a registered
+server-side extractor. Client Content-Type is never trusted. Uploads are capped
+at 20 MB, stored in a per-user FAL folder and expanded only for the LLM call.
+Persisted messages contain FAL UIDs, never base64 file bodies.
 
-Enable and start the service:
+Approval state
+==============
 
-..  code-block:: bash
+nr-llm stores the authoritative suspended run. The chat mirrors its run UUID
+and pending tool names/arguments, and resumes it through
+``AgentRuntime::approve``. A conversation owner can decide the run; a second
+decision cannot execute the same call twice because nr-llm claims it atomically.
 
-    sudo systemctl daemon-reload
-    sudo systemctl enable typo3-ai-chat-worker
-    sudo systemctl start typo3-ai-chat-worker
+Credits
+-------
 
-Scheduled cleanup
-=================
-
-Add the cleanup command to your cron or TYPO3 scheduler
-to handle stuck conversations, auto-archiving, and
-deletion of old data:
-
-..  code-block:: bash
-
-    # Run cleanup daily at 3:00 AM
-    0 3 * * * /var/www/html/vendor/bin/typo3 \
-        ai-chat:cleanup --delete-after-days=90
+Thank you to Netresearch for nr-mcp-agent, nr-llm and nr-vault. The derived
+extension preserves the upstream history, GPL license, copyright headers and
+visible attribution.

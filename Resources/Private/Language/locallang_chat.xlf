@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2">
-    <file source-language="en" datatype="plaintext" original="messages" date="2025-01-01T00:00:00Z" product-name="nr_mcp_agent">
+    <file source-language="en" datatype="plaintext" original="messages" date="2025-01-01T00:00:00Z" product-name="webconsulting_ai_chat">
         <body>
             <!-- Panel header -->
             <trans-unit id="panel.title" resname="panel.title">

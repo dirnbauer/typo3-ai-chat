@@ -23,7 +23,7 @@ Alternatives considered:
     persistent HTTP server, adding deployment complexity and changing its
     operational model.
 -   **Direct PHP function calls**: Would require forking or reimplementing the
-    MCP server logic inside ``nr_mcp_agent``, coupling the two extensions
+    MCP server logic inside ``webconsulting_ai_chat``, coupling the two extensions
     tightly.
 -   **stdio subprocess**: Uses ``hn/typo3-mcp-server`` exactly as designed, with
     zero modifications.

@@ -1,4 +1,4 @@
-name: nr-mcp-agent
+name: typo3-ai-chat
 type: php
 docroot: ""
 php_version: "8.4"
@@ -6,9 +6,9 @@ webserver_type: apache-fpm
 xdebug_enabled: false
 no_project_mount: true
 additional_hostnames:
-    - v13.nr-mcp-agent
-    - v14.nr-mcp-agent
-    - docs.nr-mcp-agent
+    - v13.typo3-ai-chat
+    - v14.typo3-ai-chat
+    - docs.typo3-ai-chat
 additional_fqdns: []
 database:
     type: mariadb
@@ -17,7 +17,7 @@ hooks:
     post-start:
         - exec: |
             # Write git info for display in backend
-            cd /var/www/nr_mcp_agent 2>/dev/null && \
+            cd /var/www/webconsulting_ai_chat 2>/dev/null && \
             echo "{\"branch\":\"$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'unknown')\",\"commit\":\"$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')\"}" > /var/www/html/.git-info.json 2>/dev/null || true
 use_dns_when_possible: true
 composer_version: "2"

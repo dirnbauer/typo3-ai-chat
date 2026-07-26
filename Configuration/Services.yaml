@@ -4,49 +4,49 @@ services:
     autoconfigure: true
     public: false
 
-  Netresearch\NrMcpAgent\:
+  Webconsulting\Typo3AiChat\:
     resource: '../Classes/*'
 
-  Netresearch\NrMcpAgent\Controller\ChatModuleController:
+  Webconsulting\Typo3AiChat\Controller\ChatModuleController:
     public: true
 
-  Netresearch\NrMcpAgent\Controller\ChatApiController:
+  Webconsulting\Typo3AiChat\Controller\ChatApiController:
     public: true
 
   # Processor: defaults to exec, override for worker mode
-  Netresearch\NrMcpAgent\Service\ChatProcessorInterface:
-    class: Netresearch\NrMcpAgent\Service\ExecChatProcessor
+  Webconsulting\Typo3AiChat\Service\ChatProcessorInterface:
+    class: Webconsulting\Typo3AiChat\Service\ExecChatProcessor
 
-  # Register nr_mcp_agent_tools cache as a DI service via CacheManager factory
-  cache.nr_mcp_agent_tools:
+  # Register webconsulting_ai_chat_tools cache as a DI service via CacheManager factory
+  cache.webconsulting_ai_chat_tools:
     class: 'TYPO3\CMS\Core\Cache\Frontend\FrontendInterface'
     factory: ['@TYPO3\CMS\Core\Cache\CacheManager', 'getCache']
     arguments:
-      $identifier: 'nr_mcp_agent_tools'
+      $identifier: 'webconsulting_ai_chat_tools'
 
   # MCP Tool Provider: interface alias with explicit cache argument to avoid ambiguous autowiring
-  Netresearch\NrMcpAgent\Mcp\McpToolProviderInterface:
-    class: Netresearch\NrMcpAgent\Mcp\McpToolProvider
+  Webconsulting\Typo3AiChat\Mcp\McpToolProviderInterface:
+    class: Webconsulting\Typo3AiChat\Mcp\McpToolProvider
     arguments:
-      $cache: '@cache.nr_mcp_agent_tools'
+      $cache: '@cache.webconsulting_ai_chat_tools'
 
-  Netresearch\NrMcpAgent\Mcp\McpToolProvider:
+  Webconsulting\Typo3AiChat\Mcp\McpToolProvider:
     arguments:
-      $cache: '@cache.nr_mcp_agent_tools'
+      $cache: '@cache.webconsulting_ai_chat_tools'
 
   # Document extractors — tagged for DocumentExtractorRegistry
-  Netresearch\NrMcpAgent\Document\DocumentExtractorRegistry:
+  Webconsulting\Typo3AiChat\Document\DocumentExtractorRegistry:
     arguments:
       - !tagged_iterator document.extractor
 
-  Netresearch\NrMcpAgent\Document\Extractor\PdfExtractor:
+  Webconsulting\Typo3AiChat\Document\Extractor\PdfExtractor:
     tags: ['document.extractor']
 
-  Netresearch\NrMcpAgent\Document\Extractor\DocxExtractor:
+  Webconsulting\Typo3AiChat\Document\Extractor\DocxExtractor:
     tags: ['document.extractor']
 
-  Netresearch\NrMcpAgent\Document\Extractor\XlsxExtractor:
+  Webconsulting\Typo3AiChat\Document\Extractor\XlsxExtractor:
     tags: ['document.extractor']
 
-  Netresearch\NrMcpAgent\Document\Extractor\PlainTextExtractor:
+  Webconsulting\Typo3AiChat\Document\Extractor\PlainTextExtractor:
     tags: ['document.extractor']

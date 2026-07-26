@@ -1,5 +1,5 @@
 /**
- * Demo GIF recorder for nr_mcp_agent.
+ * Demo GIF recorder for webconsulting_ai_chat.
  *
  * Records a real MCP agent session using the floating chat panel:
  *   1. Login → navigate to page content view (Homepage, id=10)
@@ -12,7 +12,7 @@
  * Produces: Documentation/Images/AgentDemo.gif
  *
  * Usage:
- *   TYPO3_BASE_URL=https://v14.nr-mcp-agent.ddev.site:33001 \
+ *   TYPO3_BASE_URL=https://v14.typo3-ai-chat.ddev.site:33001 \
  *     npx tsx Build/scripts/record-demo.ts
  */
 
@@ -23,7 +23,7 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 
-const BASE_URL  = process.env.TYPO3_BASE_URL      || 'https://v14.nr-mcp-agent.ddev.site:33001';
+const BASE_URL  = process.env.TYPO3_BASE_URL      || 'https://v14.typo3-ai-chat.ddev.site:33001';
 const USER      = process.env.TYPO3_ADMIN_USER     || 'admin';
 const PASSWORD  = process.env.TYPO3_ADMIN_PASSWORD || 'Joh316!!';
 const PREVIEW   = process.env.PREVIEW === '1'; // headed + slow-mo, no GIF export

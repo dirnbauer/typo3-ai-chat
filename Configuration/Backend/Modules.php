@@ -3,15 +3,15 @@
 declare(strict_types=1);
 
 return [
-    'nr_mcp_agent_chat' => [
+    'webconsulting_ai_chat_chat' => [
         'parent' => 'tools',
         'position' => ['after' => '*'],
         'access' => 'user',
-        'iconIdentifier' => 'module-nr-mcp-agent',
-        'labels' => 'LLL:EXT:nr_mcp_agent/Resources/Private/Language/locallang_mod.xlf',
+        'iconIdentifier' => 'module-typo3-ai-chat',
+        'labels' => 'LLL:EXT:webconsulting_ai_chat/Resources/Private/Language/locallang_mod.xlf',
         'routes' => [
             '_default' => [
-                'target' => \Netresearch\NrMcpAgent\Controller\ChatModuleController::class . '::indexAction',
+                'target' => \Webconsulting\Typo3AiChat\Controller\ChatModuleController::class . '::indexAction',
             ],
         ],
     ],

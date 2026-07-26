@@ -4,178 +4,97 @@
 Usage
 =====
 
-Opening the AI Chat module
-==========================
+The operator console
+====================
 
-Navigate to **Admin Tools > AI Chat** in the TYPO3
-backend. The module is available to all backend users
-who have access to the Admin Tools section (unless
-restricted via the ``allowedGroups`` setting).
+Select the chat/tools icon in the top-right TYPO3 toolbar for the inline drawer,
+or open **Tools > TYPO3 AI Chat** for the full operator console. Both surfaces
+use the same conversations, attachments, approvals and execution ledger. The
+drawer's expand button opens the full module when more room is useful.
 
-..  figure:: /Images/ChatModule.png
-    :alt: AI Chat backend module
-    :class: with-shadow
+The full interface has three working areas:
 
-    The AI Chat module in the TYPO3 backend.
+* the dark conversation rail on the left;
+* the assistant-ui thread and attachment composer in the centre;
+* the execution ledger on the right.
 
-Sending messages
-================
+The ledger is the important difference from a normal chat. It records the tools
+the agent used, their arguments, their returned result, and failures. A write or
+other governed call can pause as **Approval required**. Inspect its arguments,
+then choose **Approve once** or **Deny**. TYPO3 permissions and nr-llm policy are
+evaluated again when the run resumes.
 
-1.  Type your message in the input field at the bottom
-    of the chat area.
-2.  Press **Enter** or click the send button.
-3.  The message is sent to the server and processing
-    begins in the background.
-4.  The interface polls for updates and displays the
-    AI response when ready.
+Direct tools
+============
 
-While the assistant is processing, you will see a loading
-indicator. Processing typically takes a few seconds,
-depending on the LLM provider and whether MCP tools
-are invoked.
+The default **Direct** lane runs through nr-llm's ``AgentRuntime`` as the
+authenticated backend user.
 
-If MCP is enabled, the assistant may execute multiple
-tool calls (e.g. reading page content, then creating a
-record) before responding. Each tool call iteration is
-visible in the conversation.
+1. Create or select a conversation.
+2. Describe what you want inspected or changed.
+3. Add files if helpful.
+4. Send the request.
+5. Follow the live status and execution ledger.
+6. Review any requested approval before allowing it.
 
-..  figure:: /Images/MarkdownResponse.png
-    :alt: AI response rendered as Markdown
-    :class: with-shadow
+The direct lane is appropriate for interactive questions, TYPO3 inspection and
+bounded tool execution.
 
-    AI responses are rendered as rich Markdown — headings,
-    lists, code blocks, and tables.
+Durable Flue workflows
+======================
 
-Conversation management
-=======================
+When the administrator enables Flue, the top bar offers **Direct** and **Flue**.
+Choose Flue, enter the target page UID and send an instruction.
 
-The sidebar shows your conversation history. Each
-conversation has a title that is auto-generated from
-the first message.
+Flue creates a durable run, resolves page/workspace context, mints the MCP token,
+applies the configured MCP tool allowlist, and keeps write tools in a draft
+workspace. The chat polls the mirrored run and adds its result to both the thread
+and execution ledger.
 
-Starting a new conversation
----------------------------
+Flue intentionally accepts page workflow requests, not arbitrary shell commands.
+It is the Cursor-like MCP lane without a permission bypass.
 
-Click the **New conversation** button to start a fresh
-chat. The previous conversation remains in the sidebar
-for later access.
+Images and documents
+====================
 
-Resuming a conversation
------------------------
+Use the paperclip button or drag files onto the composer. Multiple files can be
+attached to one request.
 
-Click any conversation in the sidebar to resume it.
-The full message history is loaded, and you can continue
-where you left off.
+* Images show a thumbnail before send.
+* PDFs show an embedded first-page preview before send.
+* DOCX, TXT and XLSX show a document card.
+* Remove any pending file with the close button.
 
-Pinning conversations
----------------------
+TYPO3 validates the detected MIME type, size, FAL permission and document
+readability server-side. Files are stored below
+``fileadmin/typo3-ai-chat/<backend-user-uid>/``. The limits are 20 MB per file
+and five files per conversation.
 
-Pin important conversations to prevent them from being
-auto-archived. Pinned conversations appear at the top
-of the sidebar list.
+Conversations
+=============
 
-Archiving conversations
------------------------
+The rail lists recent conversations and their message count. Create a new
+conversation with **New conversation**. Select a previous conversation to load
+its complete thread and run ledger. The archive action removes a conversation
+from the default list without deleting its stored record.
 
-Archive conversations you no longer need actively.
-Archived conversations are hidden from the default
-sidebar view but can still be accessed.
+Migration from nr-mcp-agent
+===========================
 
-Conversations are also auto-archived after a
-configurable period of inactivity (default: 30 days).
+Keep the original extension installed until the replacement works:
 
-Attaching files
-===============
+..  code-block:: bash
 
-A **+** button appears to the left of the input field whenever file
-attachments are available.
+    vendor/bin/typo3 extension:setup
+    vendor/bin/typo3 ai-chat:migrate-nr-mcp-agent
 
-1.  Click **+** to open the attachment menu.
-2.  Select **Upload file** to open a file picker and choose a file from
-    your computer.
-3.  The selected file is uploaded immediately and shown as a badge above
-    the input field (file name and size).
-4.  Type your message and send — the file is included in the request.
+The command is idempotent, preserves target records and copies conversations and
+MCP server definitions. Only then remove ``netresearch/nr-mcp-agent``.
 
-To remove a pending attachment before sending, click the **×** on the
-file badge.
+Thank you, Netresearch
+======================
 
-..  figure:: /Images/FileAttachmentBadge.png
-    :alt: File attachment badge above the chat input
-    :class: with-shadow
-
-    A selected file is shown as a badge above the input field.
-
-**Supported file types:**
-
-The following document formats are always available. Text is extracted
-server-side before sending to the LLM:
-
-*   PDF (``application/pdf``)
-*   DOCX (``application/vnd.openxmlformats-officedocument.wordprocessingml.document``)
-*   TXT (``text/plain``)
-*   XLSX (``application/vnd.openxmlformats-officedocument.spreadsheetml.sheet``) --
-    requires ``phpoffice/phpspreadsheet`` to be installed
-
-Vision-capable providers (Claude, Gemini, GPT-4o, etc.) additionally
-accept images:
-
-*   PNG, JPEG, WebP
-
-When the provider natively supports a document format (e.g. Claude
-natively handles PDFs), the file is sent as-is instead of being
-extracted. The file picker automatically restricts to the formats
-supported by the active provider.
-
-**Limits:**
-
-*   Maximum 5 files per conversation.
-*   Maximum file size: 20 MB per file.
-
-If a file is not accepted (wrong type, too large, or upload error), an
-error message is shown above the input.
-
-Floating chat panel
-===================
-
-A chat button in the TYPO3 toolbar (top right, next to the search and
-user menu) opens a floating bottom panel. The panel stays visible across
-all module navigation -- you can chat with the AI while working in the
-page tree, list module, or any other backend module.
-
-..  figure:: /Images/ToolbarButton.png
-    :alt: Chat toolbar button in the TYPO3 backend header
-    :class: with-shadow
-
-    The chat button in the TYPO3 toolbar. The badge shows the number of
-    active (processing) conversations.
-
-The panel has four states:
-
-*   **Hidden** -- Only the toolbar button is visible.
-*   **Collapsed** -- A minimal bar at the bottom showing the active
-    conversation title.
-*   **Expanded** -- Resizable panel with the full chat interface.
-*   **Maximized** -- Full-height with conversation sidebar.
-
-..  figure:: /Images/ChatPanel.png
-    :alt: Floating chat panel in expanded state
-    :class: with-shadow
-
-    The floating panel in expanded state, overlaying the TYPO3 backend.
-    Drag the top edge to resize.
-
-Panel height and state are stored in ``localStorage`` per user.
-
-Error handling
-==============
-
-If a conversation fails (e.g. due to an LLM provider
-error or timeout), an error message is displayed. You
-can retry by sending a new message in the same
-conversation -- the system will attempt to resume
-processing.
-
-Stuck conversations (processing for more than 5 minutes)
-are automatically marked as failed by the cleanup
-command.
+This extension is derived from Netresearch's nr-mcp-agent. Thank you,
+Netresearch, for the original backend chat, document pipeline, processing
+strategies and test foundation, and for nr-llm and nr-vault. The backend itself
+also displays this credit.

@@ -1,5 +1,5 @@
 /**
- * Documentation screenshot generator for nr_mcp_agent.
+ * Documentation screenshot generator for webconsulting_ai_chat.
  *
  * Produces:
  *   Documentation/Images/ChatModule.png
@@ -9,11 +9,11 @@
  *   Documentation/Images/ChatPanel.png
  *
  * Usage:
- *   TYPO3_BASE_URL=https://v14.nr-mcp-agent.ddev.site \
+ *   TYPO3_BASE_URL=https://v14.typo3-ai-chat.ddev.site \
  *     npx ts-node --esm Build/scripts/take-screenshots.ts
  *
  *   Or with tsx (recommended):
- *   TYPO3_BASE_URL=https://v14.nr-mcp-agent.ddev.site \
+ *   TYPO3_BASE_URL=https://v14.typo3-ai-chat.ddev.site \
  *     npx tsx Build/scripts/take-screenshots.ts
  *
  * Credentials are read from env vars (defaults match DDEV dev setup):
@@ -25,7 +25,7 @@ import { chromium, Page, FrameLocator } from 'playwright';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const BASE_URL   = process.env.TYPO3_BASE_URL     || 'https://v14.nr-mcp-agent.ddev.site:33001';
+const BASE_URL   = process.env.TYPO3_BASE_URL     || 'https://v14.typo3-ai-chat.ddev.site:33001';
 const USER       = process.env.TYPO3_ADMIN_USER    || 'admin';
 const PASSWORD   = process.env.TYPO3_ADMIN_PASSWORD || 'Joh316!!';
 
@@ -56,7 +56,7 @@ async function navigateToChatModule(page: Page): Promise<FrameLocator> {
     await page.waitForTimeout(1500);
     // Module content is rendered in a typo3-iframe-module or iframe
     const iframe = page.frameLocator('typo3-iframe-module iframe, iframe').first();
-    await iframe.locator('nr-chat-app').waitFor({ timeout: 15000 });
+    await iframe.locator('wc-chat-app').waitFor({ timeout: 15000 });
     return iframe;
 }
 
@@ -100,7 +100,7 @@ async function mockConversationTitles(page: Page): Promise<void> {
         for (var i = 0; i < iframes.length; i++) {
             var doc = iframes[i].contentDocument;
             if (!doc) continue;
-            var app = doc.querySelector('nr-chat-app');
+            var app = doc.querySelector('wc-chat-app');
             if (!app || !app.shadowRoot) continue;
             var items = app.shadowRoot.querySelectorAll('.conversation-item .title');
             items.forEach(function(el, idx) {
@@ -111,7 +111,7 @@ async function mockConversationTitles(page: Page): Promise<void> {
     })(${titles})`);
 }
 
-/** Inject a mock Markdown assistant message into the nr-chat-app shadow DOM (inside iframe). */
+/** Inject a mock Markdown assistant message into the wc-chat-app shadow DOM (inside iframe). */
 async function injectMarkdownMessage(page: Page): Promise<void> {
     await page.evaluate(`(function() {
         var iframes = document.querySelectorAll('typo3-iframe-module iframe, iframe');
@@ -119,7 +119,7 @@ async function injectMarkdownMessage(page: Page): Promise<void> {
         for (var i = 0; i < iframes.length; i++) {
             var doc = iframes[i].contentDocument;
             if (!doc) continue;
-            app = doc.querySelector('nr-chat-app');
+            app = doc.querySelector('wc-chat-app');
             if (app) break;
         }
         if (!app || !app.shadowRoot) return;

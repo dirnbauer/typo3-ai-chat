@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Mcp;
+namespace Webconsulting\Typo3AiChat\Mcp;
 
-use Netresearch\NrMcpAgent\Configuration\ExtensionConfiguration;
-use Netresearch\NrMcpAgent\Domain\Repository\McpServerRepository;
-use Netresearch\NrMcpAgent\Exception\McpException;
 use Psr\Log\LoggerInterface;
 use stdClass;
 use Throwable;
 use TYPO3\CMS\Core\Cache\Frontend\FrontendInterface;
 use TYPO3\CMS\Core\Core\Environment;
+use Webconsulting\Typo3AiChat\Configuration\ExtensionConfiguration;
+use Webconsulting\Typo3AiChat\Domain\Repository\McpServerRepository;
+use Webconsulting\Typo3AiChat\Exception\McpException;
 
 final class McpToolProvider implements McpToolProviderInterface
 {

@@ -2,19 +2,19 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Tests\Unit\Mcp;
+namespace Webconsulting\Typo3AiChat\Tests\Unit\Mcp;
 
-use Netresearch\NrMcpAgent\Configuration\ExtensionConfiguration;
-use Netresearch\NrMcpAgent\Domain\Repository\McpServerRepository;
-use Netresearch\NrMcpAgent\Mcp\McpConnection;
-use Netresearch\NrMcpAgent\Mcp\McpToolProvider;
-use Netresearch\NrMcpAgent\Mcp\McpToolProviderInterface;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use ReflectionClass;
 use stdClass;
 use TYPO3\CMS\Core\Cache\Frontend\FrontendInterface;
+use Webconsulting\Typo3AiChat\Configuration\ExtensionConfiguration;
+use Webconsulting\Typo3AiChat\Domain\Repository\McpServerRepository;
+use Webconsulting\Typo3AiChat\Mcp\McpConnection;
+use Webconsulting\Typo3AiChat\Mcp\McpToolProvider;
+use Webconsulting\Typo3AiChat\Mcp\McpToolProviderInterface;
 
 class McpToolProviderTest extends TestCase
 {

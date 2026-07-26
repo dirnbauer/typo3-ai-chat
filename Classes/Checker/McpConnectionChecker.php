@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Checker;
+namespace Webconsulting\Typo3AiChat\Checker;
 
-use Netresearch\NrMcpAgent\Domain\Repository\McpServerRepository;
-use Netresearch\NrMcpAgent\Mcp\McpConnection;
 use Throwable;
 use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use Webconsulting\Typo3AiChat\Domain\Repository\McpServerRepository;
+use Webconsulting\Typo3AiChat\Mcp\McpConnection;
 
 /**
  * Tests connectivity to a single MCP server record and persists the result.

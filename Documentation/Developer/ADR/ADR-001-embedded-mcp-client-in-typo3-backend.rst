@@ -26,7 +26,7 @@ Decision
 ========
 
 Build the MCP client and AI chat interface directly into the TYPO3 backend as a
-native extension (``nr_mcp_agent``). Editors interact with the AI without leaving
+native extension (``webconsulting_ai_chat``). Editors interact with the AI without leaving
 TYPO3.
 
 Consequences

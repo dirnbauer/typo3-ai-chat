@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Exception;
+namespace Webconsulting\Typo3AiChat\Exception;
 
 /**
  * Exception thrown when MCP operations fail.

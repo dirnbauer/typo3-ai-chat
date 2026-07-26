@@ -1,4 +1,4 @@
-"tx_nrmcpagent_conversation",,,,,,,,,,,,,,
+"tx_webconsultingaichat_conversation",,,,,,,,,,,,,,
 ,"uid","pid","be_user","title","messages","message_count","status","current_request_id","system_prompt","archived","pinned","error_message","tstamp","crdate","deleted"
 ,1,0,1,"Conv 1","[]",0,"idle","","",0,0,"",1700000100,1700000100,0
 ,2,0,1,"Conv 2","[]",0,"processing","","",0,0,"",1700000200,1700000200,0

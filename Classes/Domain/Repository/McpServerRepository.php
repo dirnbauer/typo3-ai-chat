@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Domain\Repository;
+namespace Webconsulting\Typo3AiChat\Domain\Repository;
 
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
@@ -12,7 +12,7 @@ use TYPO3\CMS\Core\Database\ConnectionPool;
  */
 readonly class McpServerRepository
 {
-    private const TABLE = 'tx_nrmcpagent_mcp_server';
+    private const TABLE = 'tx_webconsultingaichat_mcp_server';
 
     public function __construct(
         private ConnectionPool $connectionPool,

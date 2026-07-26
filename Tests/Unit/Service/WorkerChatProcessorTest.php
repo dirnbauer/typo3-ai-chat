@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Netresearch\NrMcpAgent\Tests\Unit\Service;
+namespace Webconsulting\Typo3AiChat\Tests\Unit\Service;
 
-use Netresearch\NrMcpAgent\Service\WorkerChatProcessor;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use Webconsulting\Typo3AiChat\Service\WorkerChatProcessor;
 
 class WorkerChatProcessorTest extends TestCase
 {

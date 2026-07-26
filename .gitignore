@@ -6,6 +6,7 @@ test-results/
 Build/tests/playwright/.auth/
 .Build/
 vendor/
+var/
 # TYPO3 extensions (libraries) must not commit composer.lock — each consumer
 # and CI leg resolves dependencies for its own PHP/TYPO3 version.
 composer.lock
