@@ -1,5 +1,11 @@
 import ModuleMenu from '@typo3/backend/module-menu.js';
-import '../Dist/operator.js';
+
+// Propagate TYPO3's cache-busting query to the nested Vite bundle. Static
+// relative imports otherwise lose that query and can keep an older operator
+// implementation alive after an extension update.
+const operatorModuleUrl = new URL('../Dist/operator.js', import.meta.url);
+operatorModuleUrl.search = new URL(import.meta.url).search;
+await import(operatorModuleUrl.href);
 
 class ChatPanelToolbarInit {
     static init() {

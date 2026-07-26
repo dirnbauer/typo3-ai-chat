@@ -995,6 +995,10 @@ wc-typo3-ai-chat textarea {
     box-shadow: none;
 }
 
+.wc-send-button.is-cancel:disabled {
+    display: none;
+}
+
 .wc-composer-meta {
     display: flex;
     justify-content: space-between;
