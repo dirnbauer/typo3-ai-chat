@@ -148,7 +148,7 @@ final readonly class FlueWorkflowBridge
             $this->conversationRepository->update($conversation);
         }
 
-        return compact('status', 'output', 'error', 'events');
+        return ['status' => $status, 'output' => $output, 'error' => $error, 'events' => $events];
     }
 
     private function optionalService(string $className): object
