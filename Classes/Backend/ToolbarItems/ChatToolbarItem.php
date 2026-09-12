@@ -7,20 +7,30 @@ namespace Webconsulting\Typo3AiChat\Backend\ToolbarItems;
 use Psr\Http\Message\ServerRequestInterface;
 use TYPO3\CMS\Backend\Toolbar\RequestAwareToolbarItemInterface;
 use TYPO3\CMS\Backend\Toolbar\ToolbarItemInterface;
-use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Page\PageRenderer;
 use Webconsulting\Typo3AiChat\Configuration\ExtensionConfiguration;
+use Webconsulting\Typo3AiChat\Service\BackendUserContext;
 
+/**
+ * The toolbar button that opens the chat panel.
+ *
+ * It loads a LAUNCHER, not the chat. The launcher is a few lines that put a
+ * `<wc-ai-chat variant="panel">` element into the top document and import the
+ * bundle on first use, so a backend page that never opens the chat pays for
+ * nothing — and the panel, living in the top document, survives module
+ * navigation instead of being destroyed by every click in the module menu.
+ */
 final readonly class ChatToolbarItem implements ToolbarItemInterface, RequestAwareToolbarItemInterface
 {
     public function __construct(
         private ExtensionConfiguration $config,
         private PageRenderer $pageRenderer,
+        private BackendUserContext $backendUser,
     ) {}
 
     public function setRequest(ServerRequestInterface $request): void
     {
-        // Interface-required no-op: this toolbar item does not use the server request
+        // Interface-required: this toolbar item does not read the request.
     }
 
     public function checkAccess(): bool
@@ -28,42 +38,17 @@ final readonly class ChatToolbarItem implements ToolbarItemInterface, RequestAwa
         if ($this->config->getLlmTaskUid() === 0) {
             return false;
         }
-        $allowed = $this->config->getAllowedGroupIds();
-        if ($allowed === []) {
-            return true;
-        }
-        $beUser = $this->getBackendUser();
-        if ($beUser === null) {
-            return false;
-        }
-        // Admin users always have access (consistent with ChatApiController)
-        if ($beUser->isAdmin()) {
-            return true;
-        }
-        return $this->userIsInAllowedGroup($beUser, $allowed);
-    }
 
-    /**
-     * @param list<int> $allowed
-     */
-    private function userIsInAllowedGroup(BackendUserAuthentication $beUser, array $allowed): bool
-    {
-        $usergroup = $beUser->user['usergroup'] ?? null;
-        $userGroups = array_map(intval(...), explode(',', is_string($usergroup) ? $usergroup : ''));
-        return array_intersect($allowed, $userGroups) !== [];
+        return $this->backendUser->mayUseChat($this->config->getAllowedGroupIds());
     }
 
     public function getItem(): string
     {
-        $this->pageRenderer->loadJavaScriptModule('@webconsulting/typo3-ai-chat/toolbar/chat-panel.js');
-        $this->pageRenderer->addCssFile('EXT:webconsulting_ai_chat/Resources/Public/JavaScript/Dist/operator.css');
-        $this->pageRenderer->addInlineLanguageLabelFile('EXT:webconsulting_ai_chat/Resources/Private/Language/locallang_chat.xlf');
+        $this->pageRenderer->loadJavaScriptModule('@webconsulting/typo3-ai-chat/toolbar/launcher.js');
 
-        // Badge count is updated client-side from the status endpoint
-        // to avoid a DB query on every backend page load.
-        return '<span class="toolbar-item-link ai-chat-toolbar-btn" role="button" aria-label="Open TYPO3 AI Chat" aria-expanded="false" title="TYPO3 AI Chat" tabindex="0">'
+        return '<span class="toolbar-item-link ai-chat-toolbar-btn" role="button"'
+            . ' aria-label="Open TYPO3 AI Chat" aria-expanded="false" title="TYPO3 AI Chat" tabindex="0">'
             . '<typo3-backend-icon identifier="toolbar-typo3-ai-chat" size="small"></typo3-backend-icon>'
-            . '<span class="badge badge-warning ai-chat-badge" style="display:none">0</span>'
             . '</span>';
     }
 
@@ -77,7 +62,9 @@ final readonly class ChatToolbarItem implements ToolbarItemInterface, RequestAwa
         return '';
     }
 
-    /** @return array<string, string> */
+    /**
+     * @return array<string, string>
+     */
     public function getAdditionalAttributes(): array
     {
         return ['class' => 'toolbar-item ai-chat-toolbar'];
@@ -86,11 +73,5 @@ final readonly class ChatToolbarItem implements ToolbarItemInterface, RequestAwa
     public function getIndex(): int
     {
         return 25;
-    }
-
-    private function getBackendUser(): ?BackendUserAuthentication
-    {
-        $user = $GLOBALS['BE_USER'] ?? null;
-        return $user instanceof BackendUserAuthentication ? $user : null;
     }
 }

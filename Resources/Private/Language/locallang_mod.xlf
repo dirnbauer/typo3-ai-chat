@@ -6,7 +6,7 @@
                 <source>TYPO3 AI Chat</source>
             </trans-unit>
             <trans-unit id="mlang_labels_tabdescr" resname="mlang_labels_tabdescr">
-                <source>Modern governed operator console with nr-llm tools, approvals, rich files and optional Flue MCP workflows. Inspired by nr-mcp-agent — thank you, Netresearch.</source>
+                <source>Governed operator chat: ask this installation a question, and let the model run its own MCP tools under your backend permissions — with your approval for anything that writes. Inspired by nr-mcp-agent — thank you, Netresearch.</source>
             </trans-unit>
             <trans-unit id="mlang_labels_tablabel" resname="mlang_labels_tablabel">
                 <source>TYPO3 AI Chat</source>

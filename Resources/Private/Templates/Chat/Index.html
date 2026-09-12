@@ -4,6 +4,12 @@
 >
 <f:layout name="Default" />
 <f:section name="Content">
-    <wc-typo3-ai-chat data-max-length="{maxMessageLength}"></wc-typo3-ai-chat>
+    <!--
+        The mount point, and nothing else. Every piece of state the chat needs
+        it fetches from the API under the user's own session; the template's
+        only job is to say WHICH conversation the URL asked for, because that is
+        the one thing the client cannot know before it loads.
+    -->
+    <wc-ai-chat variant="module" data-conversation="{conversationUid}"></wc-ai-chat>
 </f:section>
 </html>
