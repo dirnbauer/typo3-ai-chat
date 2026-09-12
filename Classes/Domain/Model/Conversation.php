@@ -4,76 +4,60 @@ declare(strict_types=1);
 
 namespace Webconsulting\Typo3AiChat\Domain\Model;
 
-use DateTimeImmutable;
-use DateTimeInterface;
 use Webconsulting\Typo3AiChat\Enum\ConversationStatus;
-use Webconsulting\Typo3AiChat\Enum\MessageRole;
 
 /**
- * Simple DTO/Value Object — no Extbase, no AbstractEntity.
- * Use Conversation::fromRow() to hydrate from a DB row.
+ * A conversation's own state — its identity, its lifecycle and the decision it
+ * may be waiting on. NOT its messages: those are rows of their own
+ * ({@see Message}). NOT its tool trace either: nr-llm persists every step of a
+ * run and `run_uuid` is the join to it, so nothing is copied here.
+ *
+ * A plain value object over a database row, hydrated with {@see fromRow()}.
  */
 final class Conversation
 {
     private int $uid = 0;
     private int $beUser = 0;
     private string $title = '';
-    private string $messages = '';
     private int $messageCount = 0;
     private string $status = 'idle';
-    private string $currentRequestId = '';
     private string $runUuid = '';
-    private string $executionTrace = '';
     private string $pendingApproval = '';
-    private int $flueRunUid = 0;
     private string $systemPrompt = '';
+    private bool $autoApproveTools = false;
     private bool $archived = false;
     private bool $pinned = false;
     private string $errorMessage = '';
+    private int $lastMessageAt = 0;
     private int $tstamp = 0;
-    /** @phpstan-ignore-next-line property.onlyWritten */
     private int $crdate = 0;
 
     /**
-     * Factory method: hydrate from a database row array.
-     *
      * @param array<string, mixed> $row
      */
     public static function fromRow(array $row): self
     {
         $conversation = new self();
-        $conversation->uid = (int) self::val($row, 'uid', 0);
-        $conversation->beUser = (int) self::val($row, 'be_user', 0);
-        $conversation->title = (string) self::val($row, 'title', '');
-        $conversation->messages = (string) self::val($row, 'messages', '');
-        $conversation->messageCount = (int) self::val($row, 'message_count', 0);
-        $conversation->status = (string) self::val($row, 'status', 'idle');
-        $conversation->currentRequestId = (string) self::val($row, 'current_request_id', '');
-        $conversation->runUuid = (string) self::val($row, 'run_uuid', '');
-        $conversation->executionTrace = (string) self::val($row, 'execution_trace', '');
-        $conversation->pendingApproval = (string) self::val($row, 'pending_approval', '');
-        $conversation->flueRunUid = (int) self::val($row, 'flue_run_uid', 0);
-        $conversation->systemPrompt = (string) self::val($row, 'system_prompt', '');
-        $conversation->archived = (bool) self::val($row, 'archived', false);
-        $conversation->pinned = (bool) self::val($row, 'pinned', false);
-        $conversation->errorMessage = (string) self::val($row, 'error_message', '');
-        $conversation->tstamp = (int) self::val($row, 'tstamp', 0);
-        $conversation->crdate = (int) self::val($row, 'crdate', 0);
+        $conversation->uid = self::int($row, 'uid');
+        $conversation->beUser = self::int($row, 'be_user');
+        $conversation->title = self::string($row, 'title');
+        $conversation->messageCount = self::int($row, 'message_count');
+        $conversation->status = self::string($row, 'status', ConversationStatus::Idle->value);
+        $conversation->runUuid = self::string($row, 'run_uuid');
+        $conversation->pendingApproval = self::string($row, 'pending_approval');
+        $conversation->systemPrompt = self::string($row, 'system_prompt');
+        $conversation->autoApproveTools = self::int($row, 'auto_approve_tools') === 1;
+        $conversation->archived = self::int($row, 'archived') === 1;
+        $conversation->pinned = self::int($row, 'pinned') === 1;
+        $conversation->errorMessage = self::string($row, 'error_message');
+        $conversation->lastMessageAt = self::int($row, 'last_message_at');
+        $conversation->tstamp = self::int($row, 'tstamp');
+        $conversation->crdate = self::int($row, 'crdate');
+
         return $conversation;
     }
 
     /**
-     * @param array<string, mixed> $row
-     */
-    private static function val(array $row, string $key, mixed $default): int|float|string|bool|null
-    {
-        $v = $row[$key] ?? $default;
-        return is_scalar($v) ? $v : null;
-    }
-
-    /**
-     * Serialize back to a DB-compatible array (for INSERT/UPDATE).
-     *
      * @return array<string, int|string>
      */
     public function toRow(): array
@@ -81,18 +65,39 @@ final class Conversation
         return [
             'be_user' => $this->beUser,
             'title' => $this->title,
-            'messages' => $this->messages,
             'message_count' => $this->messageCount,
             'status' => $this->status,
-            'current_request_id' => $this->currentRequestId,
             'run_uuid' => $this->runUuid,
-            'execution_trace' => $this->executionTrace,
             'pending_approval' => $this->pendingApproval,
-            'flue_run_uid' => $this->flueRunUid,
             'system_prompt' => $this->systemPrompt,
-            'archived' => (int) $this->archived,
-            'pinned' => (int) $this->pinned,
+            'auto_approve_tools' => (int)$this->autoApproveTools,
+            'archived' => (int)$this->archived,
+            'pinned' => (int)$this->pinned,
             'error_message' => $this->errorMessage,
+            'last_message_at' => $this->lastMessageAt,
+        ];
+    }
+
+    /**
+     * The shape the JSON API hands to the client.
+     *
+     * @return array<string, mixed>
+     */
+    public function toArray(): array
+    {
+        return [
+            'uid' => $this->uid,
+            'title' => $this->title,
+            'status' => $this->status,
+            'messageCount' => $this->messageCount,
+            'pinned' => $this->pinned,
+            'archived' => $this->archived,
+            'autoApproveTools' => $this->autoApproveTools,
+            'runUuid' => $this->runUuid,
+            'pendingApproval' => $this->getPendingApproval(),
+            'errorMessage' => $this->errorMessage,
+            'lastMessageAt' => $this->lastMessageAt,
+            'createdAt' => $this->crdate,
         ];
     }
 
@@ -118,70 +123,17 @@ final class Conversation
 
     public function setTitle(string $title): void
     {
-        $this->title = mb_substr($title, 0, 255);
-    }
-
-    public function getMessages(): string
-    {
-        return $this->messages;
-    }
-
-    /**
-     * @return list<array<string, mixed>>
-     */
-    public function getDecodedMessages(): array
-    {
-        if ($this->messages === '') {
-            return [];
-        }
-        /** @var list<array<string, mixed>> $decoded */
-        $decoded = json_decode($this->messages, true, 512, JSON_THROW_ON_ERROR);
-
-        // Normalize tool_calls: OpenAI requires arguments as JSON string, not object.
-        // json_decode turns the stored string into an array — re-encode it.
-        foreach ($decoded as &$msg) {
-            if (!isset($msg['tool_calls']) || !is_array($msg['tool_calls'])) {
-                continue;
-            }
-            foreach ($msg['tool_calls'] as &$call) {
-                if (!is_array($call) || !is_array($call['function'] ?? null) || !is_array($call['function']['arguments'] ?? null)) {
-                    continue;
-                }
-                $call['function']['arguments'] = json_encode($call['function']['arguments'], JSON_THROW_ON_ERROR);
-            }
-            unset($call);
-        }
-        unset($msg);
-
-        return $decoded;
-    }
-
-    /**
-     * @param list<array<string, mixed>> $messages
-     */
-    public function setMessages(array $messages): void
-    {
-        $this->messages = json_encode($messages, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
-        $this->messageCount = count($messages);
-    }
-
-    /**
-     * @param string|array<mixed> $content
-     */
-    public function appendMessage(MessageRole $role, string|array $content): void
-    {
-        $messages = $this->getDecodedMessages();
-        $messages[] = ['role' => $role->value, 'content' => $content, 'createdAt' => (new DateTimeImmutable())->format(DateTimeInterface::ATOM)];
-        $this->setMessages($messages); // setMessages already updates messageCount
-
-        if ($this->title === '' && $role === MessageRole::User && is_string($content)) {
-            $this->setTitle($content);
-        }
+        $this->title = mb_substr(trim($title), 0, 255);
     }
 
     public function getMessageCount(): int
     {
         return $this->messageCount;
+    }
+
+    public function setMessageCount(int $count): void
+    {
+        $this->messageCount = max(0, $count);
     }
 
     public function getStatus(): ConversationStatus
@@ -194,16 +146,6 @@ final class Conversation
         $this->status = $status->value;
     }
 
-    public function getCurrentRequestId(): string
-    {
-        return $this->currentRequestId;
-    }
-
-    public function setCurrentRequestId(string $id): void
-    {
-        $this->currentRequestId = $id;
-    }
-
     public function getRunUuid(): string
     {
         return $this->runUuid;
@@ -214,38 +156,41 @@ final class Conversation
         $this->runUuid = mb_substr($runUuid, 0, 64);
     }
 
-    /** @return list<array<string, mixed>> */
-    public function getExecutionTrace(): array
-    {
-        return $this->decodeList($this->executionTrace);
-    }
-
-    /** @param list<array<string, mixed>> $trace */
-    public function setExecutionTrace(array $trace): void
-    {
-        $this->executionTrace = json_encode($trace, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
-    }
-
-    /** @return list<array<string, mixed>> */
+    /**
+     * The tool calls this conversation is suspended on, in the shape the
+     * approval surface renders and the approval route echoes back. Empty unless
+     * the status is awaiting_approval.
+     *
+     * @return array<string, mixed>
+     */
     public function getPendingApproval(): array
     {
-        return $this->decodeList($this->pendingApproval);
+        if ($this->pendingApproval === '') {
+            return [];
+        }
+
+        $decoded = json_decode($this->pendingApproval, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $normalised = [];
+        foreach ($decoded as $key => $value) {
+            if (is_string($key)) {
+                $normalised[$key] = $value;
+            }
+        }
+
+        return $normalised;
     }
 
-    /** @param list<array<string, mixed>> $pending */
+    /**
+     * @param array<string, mixed> $pending
+     */
     public function setPendingApproval(array $pending): void
     {
-        $this->pendingApproval = json_encode($pending, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
-    }
-
-    public function getFlueRunUid(): int
-    {
-        return $this->flueRunUid;
-    }
-
-    public function setFlueRunUid(int $runUid): void
-    {
-        $this->flueRunUid = max(0, $runUid);
+        $encoded = $pending === [] ? '' : json_encode($pending, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        $this->pendingApproval = is_string($encoded) ? $encoded : '';
     }
 
     public function getSystemPrompt(): string
@@ -256,6 +201,21 @@ final class Conversation
     public function setSystemPrompt(string $prompt): void
     {
         $this->systemPrompt = mb_substr($prompt, 0, 10000);
+    }
+
+    /**
+     * Whether the user asked for permitted write tools to run without a
+     * per-turn decision in THIS conversation. It never widens what the tool
+     * policy allows — it only skips the pause for tools already permitted.
+     */
+    public function isAutoApproveTools(): bool
+    {
+        return $this->autoApproveTools;
+    }
+
+    public function setAutoApproveTools(bool $autoApprove): void
+    {
+        $this->autoApproveTools = $autoApprove;
     }
 
     public function isArchived(): bool
@@ -288,55 +248,43 @@ final class Conversation
         $this->errorMessage = $message;
     }
 
+    public function getLastMessageAt(): int
+    {
+        return $this->lastMessageAt;
+    }
+
+    public function setLastMessageAt(int $timestamp): void
+    {
+        $this->lastMessageAt = max(0, $timestamp);
+    }
+
     public function getTstamp(): int
     {
         return $this->tstamp;
     }
 
-    public function hasPendingToolCalls(): bool
+    public function getCrdate(): int
     {
-        $messages = $this->getDecodedMessages();
-        $lastMessage = end($messages);
-        return is_array($lastMessage)
-            && ($lastMessage['role'] ?? '') === 'assistant'
-            && !empty($lastMessage['tool_calls']);
+        return $this->crdate;
     }
 
-    public function isResumable(): bool
+    /**
+     * @param array<string, mixed> $row
+     */
+    private static function int(array $row, string $key): int
     {
-        return in_array(
-            $this->getStatus(),
-            [ConversationStatus::Processing, ConversationStatus::ToolLoop, ConversationStatus::Failed],
-            true,
-        );
+        $value = $row[$key] ?? 0;
+
+        return is_numeric($value) ? (int)$value : 0;
     }
 
-    /** @return list<array<string, mixed>> */
-    private function decodeList(string $json): array
+    /**
+     * @param array<string, mixed> $row
+     */
+    private static function string(array $row, string $key, string $default = ''): string
     {
-        if ($json === '') {
-            return [];
-        }
+        $value = $row[$key] ?? $default;
 
-        $decoded = json_decode($json, true);
-        if (!is_array($decoded)) {
-            return [];
-        }
-
-        $result = [];
-        foreach ($decoded as $item) {
-            if (!is_array($item)) {
-                continue;
-            }
-            $normalized = [];
-            foreach ($item as $key => $value) {
-                if (is_string($key)) {
-                    $normalized[$key] = $value;
-                }
-            }
-            $result[] = $normalized;
-        }
-
-        return $result;
+        return is_scalar($value) ? (string)$value : $default;
     }
 }

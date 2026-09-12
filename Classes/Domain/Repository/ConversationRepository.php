@@ -11,10 +11,13 @@ use Webconsulting\Typo3AiChat\Enum\ConversationStatus;
 
 /**
  * DBAL-based repository — no Extbase, direct QueryBuilder access.
+ *
+ * Every read a user can reach is scoped by `be_user`, so a guessed uid never
+ * opens somebody else's conversation.
  */
 readonly class ConversationRepository
 {
-    private const TABLE = 'tx_webconsultingaichat_conversation';
+    public const TABLE = 'tx_webconsultingaichat_conversation';
 
     public function __construct(
         private ConnectionPool $connectionPool,
@@ -22,54 +25,32 @@ readonly class ConversationRepository
 
     public function findByUid(int $uid): ?Conversation
     {
-        $qb = $this->connectionPool->getQueryBuilderForTable(self::TABLE);
-        $row = $qb->select('*')
+        $queryBuilder = $this->connectionPool->getQueryBuilderForTable(self::TABLE);
+        $row = $queryBuilder->select('*')
             ->from(self::TABLE)
             ->where(
-                $qb->expr()->eq('uid', $qb->createNamedParameter($uid, Connection::PARAM_INT)),
-                $qb->expr()->eq('deleted', $qb->createNamedParameter(0, Connection::PARAM_INT)),
+                $queryBuilder->expr()->eq('uid', $queryBuilder->createNamedParameter($uid, Connection::PARAM_INT)),
+                $queryBuilder->expr()->eq('deleted', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT)),
             )
             ->executeQuery()
             ->fetchAssociative();
 
         return $row !== false ? Conversation::fromRow($row) : null;
-    }
-
-    private const LIST_COLUMNS = [
-        'uid', 'be_user', 'title', 'status', 'message_count',
-        'pinned', 'archived', 'error_message', 'run_uuid',
-        'pending_approval', 'flue_run_uid', 'tstamp', 'crdate',
-    ];
-
-    /** @return list<Conversation> */
-    public function findByBeUser(int $beUserUid, bool $includeArchived = false): array
-    {
-        $qb = $this->connectionPool->getQueryBuilderForTable(self::TABLE);
-        $qb->select(...self::LIST_COLUMNS)
-            ->from(self::TABLE)
-            ->where(
-                $qb->expr()->eq('be_user', $qb->createNamedParameter($beUserUid, Connection::PARAM_INT)),
-                $qb->expr()->eq('deleted', $qb->createNamedParameter(0, Connection::PARAM_INT)),
-            )
-            ->orderBy('tstamp', 'DESC');
-
-        if (!$includeArchived) {
-            $qb->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(0, Connection::PARAM_INT)));
-        }
-
-        $rows = $qb->executeQuery()->fetchAllAssociative();
-        return array_map(Conversation::fromRow(...), $rows);
     }
 
     public function findOneByUidAndBeUser(int $uid, int $beUserUid): ?Conversation
     {
-        $qb = $this->connectionPool->getQueryBuilderForTable(self::TABLE);
-        $row = $qb->select('*')
+        if ($uid <= 0 || $beUserUid <= 0) {
+            return null;
+        }
+
+        $queryBuilder = $this->connectionPool->getQueryBuilderForTable(self::TABLE);
+        $row = $queryBuilder->select('*')
             ->from(self::TABLE)
             ->where(
-                $qb->expr()->eq('uid', $qb->createNamedParameter($uid, Connection::PARAM_INT)),
-                $qb->expr()->eq('be_user', $qb->createNamedParameter($beUserUid, Connection::PARAM_INT)),
-                $qb->expr()->eq('deleted', $qb->createNamedParameter(0, Connection::PARAM_INT)),
+                $queryBuilder->expr()->eq('uid', $queryBuilder->createNamedParameter($uid, Connection::PARAM_INT)),
+                $queryBuilder->expr()->eq('be_user', $queryBuilder->createNamedParameter($beUserUid, Connection::PARAM_INT)),
+                $queryBuilder->expr()->eq('deleted', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT)),
             )
             ->executeQuery()
             ->fetchAssociative();
@@ -77,236 +58,194 @@ readonly class ConversationRepository
         return $row !== false ? Conversation::fromRow($row) : null;
     }
 
-    public function countActiveByBeUser(int $beUserUid): int
+    /**
+     * @return list<Conversation>
+     */
+    public function findByBeUser(int $beUserUid, bool $includeArchived = false): array
     {
-        $qb = $this->connectionPool->getQueryBuilderForTable(self::TABLE);
-        $fetchResult = $qb->count('uid')
+        $queryBuilder = $this->connectionPool->getQueryBuilderForTable(self::TABLE);
+        $queryBuilder->select('*')
             ->from(self::TABLE)
             ->where(
-                $qb->expr()->eq('be_user', $qb->createNamedParameter($beUserUid, Connection::PARAM_INT)),
-                $qb->expr()->in('status', $qb->createNamedParameter(
-                    [
-                        ConversationStatus::Processing->value,
-                        ConversationStatus::Locked->value,
-                        ConversationStatus::ToolLoop->value,
-                        ConversationStatus::FlueRunning->value,
-                    ],
-                    Connection::PARAM_STR_ARRAY,
-                )),
-                $qb->expr()->eq('deleted', $qb->createNamedParameter(0, Connection::PARAM_INT)),
+                $queryBuilder->expr()->eq('be_user', $queryBuilder->createNamedParameter($beUserUid, Connection::PARAM_INT)),
+                $queryBuilder->expr()->eq('deleted', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT)),
             )
-            ->executeQuery()
-            ->fetchOne();
-        if (is_int($fetchResult)) {
-            return $fetchResult;
+            ->orderBy('pinned', 'DESC')
+            ->addOrderBy('last_message_at', 'DESC')
+            ->addOrderBy('uid', 'DESC');
+
+        if (!$includeArchived) {
+            $queryBuilder->andWhere(
+                $queryBuilder->expr()->eq('archived', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT)),
+            );
         }
-        return is_string($fetchResult) ? (int) $fetchResult : 0;
+
+        return array_map(Conversation::fromRow(...), $queryBuilder->executeQuery()->fetchAllAssociative());
     }
 
     public function add(Conversation $conversation): int
     {
-        $conn = $this->connectionPool->getConnectionForTable(self::TABLE);
+        $connection = $this->connectionPool->getConnectionForTable(self::TABLE);
         $data = $conversation->toRow();
-        $data['crdate'] = $data['tstamp'] = time();
         $data['pid'] = 0;
-        $conn->insert(self::TABLE, $data);
-        return (int) $conn->lastInsertId();
+        $data['crdate'] = $data['tstamp'] = time();
+        $connection->insert(self::TABLE, $data);
+
+        return (int)$connection->lastInsertId();
     }
 
     public function update(Conversation $conversation): void
     {
-        $conn = $this->connectionPool->getConnectionForTable(self::TABLE);
+        $connection = $this->connectionPool->getConnectionForTable(self::TABLE);
         $data = $conversation->toRow();
         $data['tstamp'] = time();
-        $conn->update(self::TABLE, $data, ['uid' => $conversation->getUid()]);
+        $connection->update(self::TABLE, $data, ['uid' => $conversation->getUid()]);
     }
 
     /**
-     * Lightweight status-only update — avoids writing the full messages blob.
-     */
-    public function updateStatus(int $uid, ConversationStatus $status, int $beUserUid): void
-    {
-        $conn = $this->connectionPool->getConnectionForTable(self::TABLE);
-        $conn->update(self::TABLE, [
-            'status' => $status->value,
-            'tstamp' => time(),
-        ], ['uid' => $uid, 'be_user' => $beUserUid]);
-    }
-
-    /**
-     * Lightweight flag update — avoids reading/writing the full messages blob.
-     */
-    public function updateArchived(int $uid, bool $archived, int $beUserUid): void
-    {
-        $conn = $this->connectionPool->getConnectionForTable(self::TABLE);
-        $conn->update(self::TABLE, [
-            'archived' => (int) $archived,
-            'tstamp' => time(),
-        ], ['uid' => $uid, 'be_user' => $beUserUid]);
-    }
-
-    /**
-     * Lightweight flag update — avoids reading/writing the full messages blob.
-     */
-    public function updatePinned(int $uid, bool $pinned, int $beUserUid): void
-    {
-        $conn = $this->connectionPool->getConnectionForTable(self::TABLE);
-        $conn->update(self::TABLE, [
-            'pinned' => (int) $pinned,
-            'tstamp' => time(),
-        ], ['uid' => $uid, 'be_user' => $beUserUid]);
-    }
-
-    /**
-     * Lightweight title update — avoids reading/writing the full messages blob.
-     */
-    public function updateTitle(int $uid, string $title, int $beUserUid): void
-    {
-        $conn = $this->connectionPool->getConnectionForTable(self::TABLE);
-        $conn->update(self::TABLE, [
-            'title'  => $title,
-            'tstamp' => time(),
-        ], ['uid' => $uid, 'be_user' => $beUserUid]);
-    }
-
-    /**
-     * Lightweight poll check — returns status metadata without loading messages.
+     * Claim the conversation for one turn.
      *
-     * @return array{status: string, message_count: int, error_message: string, run_uuid: string, pending_approval: string, execution_trace: string, flue_run_uid: int}|null
-     */
-    public function findPollStatus(int $uid, int $beUserUid): ?array
-    {
-        $qb = $this->connectionPool->getQueryBuilderForTable(self::TABLE);
-        $row = $qb->select(
-            'status',
-            'message_count',
-            'error_message',
-            'run_uuid',
-            'pending_approval',
-            'execution_trace',
-            'flue_run_uid',
-        )
-            ->from(self::TABLE)
-            ->where(
-                $qb->expr()->eq('uid', $qb->createNamedParameter($uid, Connection::PARAM_INT)),
-                $qb->expr()->eq('be_user', $qb->createNamedParameter($beUserUid, Connection::PARAM_INT)),
-                $qb->expr()->eq('deleted', $qb->createNamedParameter(0, Connection::PARAM_INT)),
-            )
-            ->executeQuery()
-            ->fetchAssociative();
-
-        if ($row === false) {
-            return null;
-        }
-
-        $status = $row['status'] ?? '';
-        $messageCount = $row['message_count'] ?? 0;
-        $errorMessage = $row['error_message'] ?? '';
-        $runUuid = $row['run_uuid'] ?? '';
-        $pendingApproval = $row['pending_approval'] ?? '';
-        $executionTrace = $row['execution_trace'] ?? '';
-        $flueRunUid = $row['flue_run_uid'] ?? 0;
-
-        if (is_int($messageCount)) {
-            $messageCountInt = $messageCount;
-        } else {
-            $messageCountInt = is_string($messageCount) ? (int) $messageCount : 0;
-        }
-
-        return [
-            'status' => is_string($status) ? $status : '',
-            'message_count' => $messageCountInt,
-            'error_message' => is_string($errorMessage) ? $errorMessage : '',
-            'run_uuid' => is_string($runUuid) ? $runUuid : '',
-            'pending_approval' => is_string($pendingApproval) ? $pendingApproval : '',
-            'execution_trace' => is_string($executionTrace) ? $executionTrace : '',
-            'flue_run_uid' => is_numeric($flueRunUid) ? (int) $flueRunUid : 0,
-        ];
-    }
-
-    /**
-     * Atomic Compare-And-Swap: writes the full conversation row only if the
-     * current DB status matches $expectedStatus. Prevents race conditions
-     * where a worker could claim the row between a status change and the data write.
+     * This is the single-in-flight-turn lock, and it is a compare-and-swap for
+     * the reason every lock is: two tabs pressing send at the same moment must
+     * not both start a run against the same transcript. The loser is told the
+     * conversation is busy rather than silently interleaving with the winner.
      *
-     * Returns true if the row was updated (status matched), false otherwise.
+     * @param list<ConversationStatus> $expected the states a turn may start from
      */
-    public function updateIf(Conversation $conversation, ConversationStatus $expectedStatus): bool
+    public function claimForTurn(int $uid, int $beUserUid, array $expected, string $runUuid): bool
     {
-        $conn = $this->connectionPool->getConnectionForTable(self::TABLE);
-        $data = $conversation->toRow();
-        $data['tstamp'] = time();
-
-        $columns = [];
-        $params = [];
-        foreach ($data as $col => $val) {
-            $columns[] = $col . ' = ?';
-            $params[] = $val;
+        if ($expected === []) {
+            return false;
         }
-        // WHERE uid = ? AND status = ? AND deleted = 0
-        $params[] = $conversation->getUid();
-        $params[] = $expectedStatus->value;
 
-        $params[] = 0; // deleted
+        $connection = $this->connectionPool->getConnectionForTable(self::TABLE);
+        $expectedValues = array_map(static fn(ConversationStatus $status): string => $status->value, $expected);
+        $placeholders = implode(', ', array_fill(0, count($expectedValues), '?'));
 
-        $affected = $conn->executeStatement(
-            'UPDATE ' . self::TABLE . ' SET ' . implode(', ', $columns)
-            . ' WHERE uid = ? AND status = ? AND deleted = ?',
-            $params,
+        $affected = $connection->executeStatement(
+            'UPDATE ' . self::TABLE
+            . ' SET status = ?, run_uuid = ?, error_message = ?, pending_approval = ?, tstamp = ?'
+            . ' WHERE uid = ? AND be_user = ? AND deleted = 0 AND status IN (' . $placeholders . ')',
+            [
+                ConversationStatus::Processing->value,
+                $runUuid,
+                '',
+                '',
+                time(),
+                $uid,
+                $beUserUid,
+                ...$expectedValues,
+            ],
         );
+
         return $affected > 0;
     }
 
     /**
-     * Atomically claim one 'processing' conversation for a worker.
-     * Selects the oldest candidate, then uses a compare-and-swap update. If
-     * another worker wins the race, the next candidate is tried. This remains
-     * atomic without vendor-specific UPDATE ORDER BY/LIMIT syntax.
+     * Release the claim, settling the conversation into its post-turn state.
+     *
+     * @param array<string, mixed> $pendingApproval
      */
-    public function dequeueForWorker(string $workerId): ?Conversation
-    {
-        $conn = $this->connectionPool->getConnectionForTable(self::TABLE);
-
-        for ($attempt = 0; $attempt < 10; ++$attempt) {
-            $qb = $this->connectionPool->getQueryBuilderForTable(self::TABLE);
-            $candidateUid = $qb->select('uid')
-                ->from(self::TABLE)
-                ->where(
-                    $qb->expr()->eq('status', $qb->createNamedParameter(ConversationStatus::Processing->value)),
-                    $qb->expr()->eq('deleted', $qb->createNamedParameter(0)),
-                )
-                ->orderBy('tstamp', 'ASC')
-                ->addOrderBy('uid', 'ASC')
-                ->setMaxResults(1)
-                ->executeQuery()
-                ->fetchOne();
-
-            if ($candidateUid === false) {
-                return null;
-            }
-            if (!is_int($candidateUid) && !is_string($candidateUid)) {
-                return null;
-            }
-            $candidateUid = (int) $candidateUid;
-
-            $affected = $conn->executeStatement(
-                'UPDATE ' . self::TABLE . '
-                 SET status = ?, current_request_id = ?
-                 WHERE uid = ? AND status = ? AND deleted = ?',
-                [
-                    ConversationStatus::Locked->value,
-                    $workerId,
-                    $candidateUid,
-                    ConversationStatus::Processing->value,
-                    0,
-                ],
-            );
-
-            if ($affected === 1) {
-                return $this->findByUid($candidateUid);
-            }
+    public function settle(
+        int $uid,
+        int $beUserUid,
+        ConversationStatus $status,
+        string $errorMessage = '',
+        array $pendingApproval = [],
+        string $runUuid = '',
+    ): void {
+        $encoded = '';
+        if ($pendingApproval !== []) {
+            $json = json_encode($pendingApproval, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            $encoded = is_string($json) ? $json : '';
         }
 
-        return null;
+        $this->connectionPool->getConnectionForTable(self::TABLE)->update(
+            self::TABLE,
+            [
+                'status' => $status->value,
+                'error_message' => $errorMessage,
+                'pending_approval' => $encoded,
+                'run_uuid' => $runUuid,
+                'tstamp' => time(),
+            ],
+            ['uid' => $uid, 'be_user' => $beUserUid],
+        );
+    }
+
+    /**
+     * Write back the counters a finished turn produced, without touching the
+     * lifecycle columns.
+     */
+    public function touchMessages(int $uid, int $messageCount, int $lastMessageAt, ?string $title = null): void
+    {
+        $data = [
+            'message_count' => $messageCount,
+            'last_message_at' => $lastMessageAt,
+            'tstamp' => time(),
+        ];
+        if ($title !== null && $title !== '') {
+            $data['title'] = mb_substr($title, 0, 255);
+        }
+
+        $this->connectionPool->getConnectionForTable(self::TABLE)->update(self::TABLE, $data, ['uid' => $uid]);
+    }
+
+    public function countActiveByBeUser(int $beUserUid): int
+    {
+        $queryBuilder = $this->connectionPool->getQueryBuilderForTable(self::TABLE);
+        $count = $queryBuilder->count('uid')
+            ->from(self::TABLE)
+            ->where(
+                $queryBuilder->expr()->eq('be_user', $queryBuilder->createNamedParameter($beUserUid, Connection::PARAM_INT)),
+                $queryBuilder->expr()->in('status', $queryBuilder->createNamedParameter(
+                    [ConversationStatus::Processing->value, ConversationStatus::AwaitingApproval->value],
+                    Connection::PARAM_STR_ARRAY,
+                )),
+                $queryBuilder->expr()->eq('deleted', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT)),
+            )
+            ->executeQuery()
+            ->fetchOne();
+
+        return is_numeric($count) ? (int)$count : 0;
+    }
+
+    public function updateArchived(int $uid, bool $archived, int $beUserUid): void
+    {
+        $this->updateColumns($uid, $beUserUid, ['archived' => (int)$archived]);
+    }
+
+    public function updatePinned(int $uid, bool $pinned, int $beUserUid): void
+    {
+        $this->updateColumns($uid, $beUserUid, ['pinned' => (int)$pinned]);
+    }
+
+    public function updateTitle(int $uid, string $title, int $beUserUid): void
+    {
+        $this->updateColumns($uid, $beUserUid, ['title' => mb_substr(trim($title), 0, 255)]);
+    }
+
+    public function updateAutoApproveTools(int $uid, bool $autoApprove, int $beUserUid): void
+    {
+        $this->updateColumns($uid, $beUserUid, ['auto_approve_tools' => (int)$autoApprove]);
+    }
+
+    /**
+     * Soft-delete. The row survives for the cleanup command, which prunes it
+     * together with its messages and its attachments.
+     */
+    public function softDelete(int $uid, int $beUserUid): void
+    {
+        $this->updateColumns($uid, $beUserUid, ['deleted' => 1]);
+    }
+
+    /**
+     * @param array<string, int|string> $data
+     */
+    private function updateColumns(int $uid, int $beUserUid, array $data): void
+    {
+        $data['tstamp'] = time();
+        $this->connectionPool->getConnectionForTable(self::TABLE)
+            ->update(self::TABLE, $data, ['uid' => $uid, 'be_user' => $beUserUid]);
     }
 }
