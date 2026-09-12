@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- The bundled MCP client (stdio/SSE subprocess connections), the
+  `tx_webconsultingaichat_mcp_server` registry table and its TCA, the CLI
+  processing lane (`webconsulting-ai-chat:process`,
+  `webconsulting-ai-chat:worker`) and the optional Flue workflow lane.
+- `webconsulting-ai-chat:migrate-nr-mcp-agent`. **Data migration from
+  `nr_mcp_agent` is only available in the 1.x line.** Sites still holding
+  nr-mcp-agent data must run the migration on 1.x before upgrading to 2.0.0.
+- The legacy vanilla-JS/Lit chat UI, the vendored `marked`/`DOMPurify`
+  bundles, the assistant-ui operator bundle and their Jest/Playwright suites.
+
 ## [0.7.0] - 2026-07-24
 
 ### Changed

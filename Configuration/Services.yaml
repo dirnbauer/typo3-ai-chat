@@ -6,6 +6,10 @@ services:
 
   Webconsulting\Typo3AiChat\:
     resource: '../Classes/*'
+    exclude:
+      - '../Classes/Domain/Model/*'
+      - '../Classes/Enum/*'
+      - '../Classes/Exception/*'
 
   Webconsulting\Typo3AiChat\Controller\ChatModuleController:
     public: true
@@ -13,26 +17,13 @@ services:
   Webconsulting\Typo3AiChat\Controller\ChatApiController:
     public: true
 
-  # Processor: defaults to exec, override for worker mode
-  Webconsulting\Typo3AiChat\Service\ChatProcessorInterface:
-    class: Webconsulting\Typo3AiChat\Service\ExecChatProcessor
-
-  # Register webconsulting_ai_chat_tools cache as a DI service via CacheManager factory
+  # Register the webconsulting_ai_chat_tools cache as a DI service via the
+  # CacheManager factory so the catalogue projection can be injected.
   cache.webconsulting_ai_chat_tools:
     class: 'TYPO3\CMS\Core\Cache\Frontend\FrontendInterface'
     factory: ['@TYPO3\CMS\Core\Cache\CacheManager', 'getCache']
     arguments:
       $identifier: 'webconsulting_ai_chat_tools'
-
-  # MCP Tool Provider: interface alias with explicit cache argument to avoid ambiguous autowiring
-  Webconsulting\Typo3AiChat\Mcp\McpToolProviderInterface:
-    class: Webconsulting\Typo3AiChat\Mcp\McpToolProvider
-    arguments:
-      $cache: '@cache.webconsulting_ai_chat_tools'
-
-  Webconsulting\Typo3AiChat\Mcp\McpToolProvider:
-    arguments:
-      $cache: '@cache.webconsulting_ai_chat_tools'
 
   # Document extractors — tagged for DocumentExtractorRegistry
   Webconsulting\Typo3AiChat\Document\DocumentExtractorRegistry:
