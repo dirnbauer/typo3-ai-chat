@@ -1,337 +1,139 @@
 ..  include:: /Includes.rst.txt
 
+..  _developer-architecture:
+
 ============
 Architecture
 ============
 
-System overview
-===============
-
-::
-
-    Browser (Backend Module)
-        |
-        | AJAX (poll + send)
-        v
-    ChatApiController
-        |
-        | enqueue message
-        v
-    ConversationRepository  <----->  Database
-        |                         (tx_webconsultingaichat_conversation)
-        |
-        v
-    ChatProcessor (exec or worker)
-        |
-        | fork CLI / dequeue
-        v
-    ProcessChatCommand / ChatWorkerCommand
-        |
-        v
-    ChatService
-        |
-        | resolve Task --> Configuration (nr-llm DB)
-        | build system prompt + transcript
-        v
-    nr-llm AgentRuntime::run(configuration, messages, beUserUid)
-        |
-        |--- LLM Provider (OpenAI, Anthropic, ...)
-        |
-        |--- nr-llm ToolRegistry (builtin backend tools)
-                 |
-                 v
-            Logs, exceptions, system status, records,
-            page content, ... (RBAC + tool gate enforced)
-
-The frontend (a Lit web component) communicates with the
-backend exclusively through polling. There are no
-WebSocket or Server-Sent Events connections.
-
-The AI Chat is accessible in two ways:
-
-*   **Backend module** (Admin Tools > AI Chat) -- Full-page chat
-    interface for longer conversations and history management.
-*   **Toolbar panel** -- Floating bottom panel triggered by the
-    toolbar button. Stays visible across module navigation,
-    allowing users to chat while working in the page tree.
-
-Key design decisions
+Where the parts live
 ====================
 
-Polling over SSE
-----------------
+Three packages, and the division is deliberate:
 
-The chat UI uses periodic AJAX polling instead of
-Server-Sent Events (SSE) or WebSockets. This was chosen
-because:
+..  code-block:: text
 
-*   It works reliably behind reverse proxies and load
-    balancers without special configuration.
-*   TYPO3 backend requests go through the standard
-    middleware stack, ensuring authentication and CSRF
-    protection.
-*   The polling interval is short enough (1-2 seconds)
-    to feel responsive.
+    hn/typo3-mcp-server     the TOOLS      — what can be done to TYPO3
+    netresearch/nr-llm      the RUNTIME    — the loop, approvals, runs, budgets
+    webconsulting_ai_chat   the SEAM       — projects one into the other,
+                                             and presents the result
 
-CLI processing over HTTP
-------------------------
+This extension owns very little on purpose. It does not implement tools (the MCP
+server does) and it does not implement an agent loop (nr-llm does). What it owns
+is the join: projecting the catalogue, running one turn per request, persisting
+the transcript, and the HTTP surface.
 
-Message processing happens in CLI context
-(``webconsulting-ai-chat:process`` or ``webconsulting-ai-chat:worker``), not in the
-web request. This design:
-
-*   Avoids PHP timeout issues -- the LLM calls and tool
-    execution in the agent run can take many seconds.
-*   Keeps the web server responsive -- no long-running
-    HTTP connections.
-*   Allows the worker mode to reuse a single process
-    for multiple requests, reducing overhead.
-
-Crash recovery
---------------
-
-The system is designed to handle crashes gracefully:
-
-*   Every state transition is persisted to the database
-    immediately.
-*   If a CLI process crashes mid-conversation, the
-    conversation remains in ``processing``, ``locked``,
-    or ``tool_loop`` status.
-*   The ``webconsulting-ai-chat:cleanup`` command detects conversations
-    stuck for more than 5 minutes and marks them as
-    ``failed``.
-*   Users see a clear error message and can retry.
-
-Domain model
-============
-
-Conversation
-------------
-
-The central entity. Stored in
-``tx_webconsultingaichat_conversation``.
-
-**Fields:**
-
-``be_user``
-    UID of the owning backend user.
-
-``title``
-    Auto-generated title from the first message.
-
-``messages``
-    JSON-encoded array of all messages (user, assistant,
-    tool calls, tool results). Stored as ``mediumtext``.
-
-    User messages with file attachments contain additional fields:
-
-    .. code-block:: json
-
-        {
-            "role": "user",
-            "content": "What is in this image?",
-            "fileUid": 42,
-            "fileName": "photo.jpg",
-            "fileMimeType": "image/jpeg"
-        }
-
-    The ``fileUid`` is a TYPO3 FAL UID. ``ChatService::buildLlmMessages()``
-    reads the file and converts it to a multimodal content array before
-    passing messages to the LLM.
-
-``message_count``
-    Denormalized count for display without decoding.
-
-``status``
-    Current processing state (see below).
-
-``current_request_id``
-    Identifier for the active processing request. Used
-    for worker dequeue locking.
-
-``system_prompt``
-    Optional custom system prompt override (per conversation).
-
-System prompt priority
-----------------------
-
-The system prompt is composed in this order:
-
-1.  **Identity / behaviour contract** -- Always prepended. A
-    fixed block establishes that the assistant is TYPO3 AI
-    Chat by Webconsulting, credits Netresearch's open foundation, steers it to use its
-    tools instead of asking the user to paste data, forbids
-    it from claiming to be ChatGPT/OpenAI, and tells it to
-    answer in the user's language. This holds regardless of
-    how the Task/Configuration prompt is set.
-2.  **Conversation-level prompt** -- If a conversation has a
-    custom ``system_prompt`` set, it is used in place of the
-    Configuration/Task prompts.
-3.  **nr-llm Configuration + Task prompts** -- Otherwise the
-    ``system_prompt`` from the nr-llm Configuration record
-    and the ``prompt_template`` from the Task record are
-    combined (separated by a blank line). Configure these in
-    the TYPO3 backend to provide tool usage instructions or
-    persona definitions.
-
-The site-language context is appended in every case.
-
-Configuration resolution
--------------------------
-
-``ChatService`` resolves the ``LlmConfiguration`` the chat
-runs against, and the prompts, through nr-llm:
-
-1.  Load the Task record via nr-llm's ``TaskRepository`` (by
-    ``llmTaskUid`` from extension configuration).
-2.  Take ``Task::getConfiguration()`` as the ``LlmConfiguration``
-    passed to ``AgentRuntime::run()``. A missing Task or
-    Configuration fails the turn loudly.
-3.  The Configuration's ``system_prompt`` and the Task's
-    ``prompt_template`` feed ``buildSystemPrompt()``.
-
-A provider adapter is still created from the Configuration's
-model (via ``ProviderAdapterRegistry``) — but only to expand
-file attachments and report supported formats; the chat turn
-itself runs inside nr-llm's ``AgentRuntime``.
-
-``archived``
-    Whether the conversation is archived.
-
-``pinned``
-    Whether the conversation is pinned (prevents
-    auto-archiving).
-
-``error_message``
-    Last error message (sanitized, no API keys).
-
-ConversationStatus
-------------------
-
-The conversation lifecycle is modeled as a state enum:
-
-``idle``
-    Ready for new user input. This is the resting state.
-
-``processing``
-    A CLI process is actively calling the LLM.
-
-``locked``
-    Reserved by a worker process for dequeue.
-
-``tool_loop``
-    Legacy transitional state. The tool loop now runs
-    synchronously inside nr-llm's ``AgentRuntime`` within a
-    single ``processing`` turn, so the chat no longer parks a
-    conversation here; the state is retained for backward
-    compatibility.
-
-``failed``
-    An error occurred. The user can retry by sending
-    a new message.
-
-State transitions::
-
-    idle --> processing --> idle          (success)
-    idle --> processing --> tool_loop --> processing
-                                             (tool iteration)
-    idle --> processing --> failed        (error)
-    * --> failed                         (cleanup timeout)
-
-File attachment flow
+One turn, end to end
 ====================
 
-::
+..  code-block:: text
 
-    User selects file (upload or FAL browser)
-        |
-        | POST /webconsulting/ai-chat/file-upload (multipart/form-data)
-        v
-    ChatApiController::fileUpload()
-        | validates MIME type + size (max 20 MB)
-        v
-    FAL storage: fileadmin/ai-chat/<be_user_uid>/
-        | returns fileUid
-        v
-    Frontend stores {fileUid, name, mimeType} as pendingFile
+    POST conversations/turn
+      │
+      ├─ ChatApiController          authorise, parse, rate-limit, CLAIM the
+      │                             conversation (the per-conversation lock)
+      │
+      ├─ ChatTurnService            persist the user message
+      │                             build an AgentRunRequest:
+      │                               · configuration  ← nr-llm Task
+      │                               · messages       ← TranscriptBuilder
+      │                               · actor          ← BackendUserContext
+      │                               · allowedTools   ← ToolAccessService
+      │                               · options        ← ToolOptions + caller source
+      │
+      ├─ AgentRuntime::run()        nr-llm owns everything in here
+      │    └─ ToolRegistry
+      │         └─ McpCatalogToolProvider  ← our projection
+      │              └─ McpCatalogTool
+      │                   └─ McpToolCatalogService::execute()   IN-PROCESS
+      │
+      ├─ TurnStepRecorder           steps → client events, as they happen
+      ├─ TurnPersister              steps → message rows
+      ├─ RunOutcomeMapper           outcome → conversation status
+      └─ SSE or JSON                the same events either way
 
-    User sends message
-        |
-        | POST /webconsulting/ai-chat/conversations/send {content, fileUids}
-        v
-    ChatApiController::sendMessage()
-        | validates file limit (max 5 per conversation)
-        | reads FAL metadata (fileName, fileMimeType)
-        | stores message with fileUid in conversation JSON
-        v
-    ChatService::processConversation()
-        |
-        v
-    ChatService::buildLlmMessages()
-        | reads file from FAL (getForLocalProcessing)
-        | for each file attachment:
-        |   images  → base64 data URI (provider must be VisionCapable)
-        |   documents (PDF/DOCX/XLSX/TXT):
-        |     if provider implements DocumentCapableInterface
-        |       → sent as binary (base64-encoded document block)
-        |     else
-        |       → DocumentExtractorRegistry::extract() → plain-text block
-        v
-    nr-llm AgentRuntime (multimodal messages forwarded to the provider)
+The tool projection
+===================
 
-``ChatService::getProviderCapabilities()`` queries the active provider for
-its supported formats. It calls ``VisionCapableInterface::getSupportedImageFormats()``
-for image formats and, if the provider also implements
-``DocumentCapableInterface``, appends ``getSupportedDocumentFormats()``
-(e.g. ``['pdf']``). The frontend receives this list via
-``GET /webconsulting/ai-chat/status``
-and uses it to set the file picker's ``accept`` attribute dynamically —
-ensuring users can only select file types the current provider can process.
+nr-llm knows its builtin tools at container-compile time because they are
+DI-tagged classes. The MCP catalogue cannot be known then — which tools exist
+depends on which extensions are installed and on what the capability manifest
+permits, both runtime facts. :php:`ToolProviderInterface` exists for exactly
+that, so :php:`McpCatalogToolProvider` is tagged ``nr_llm.tool_provider`` and
+yields one :php:`McpCatalogTool` per catalogue entry.
 
-Component map
-=============
+Each projected tool carries three declarations the runtime acts on:
 
-.. list-table::
-   :header-rows: 1
-   :widths: 25 40 35
+``effect``
+    Does it write? From the tool's MCP annotations first, the capability
+    manifest's required subsystems second. An **empty** declaration is read-only
+    (``GetCapabilities`` really does touch nothing); an **unknown** subsystem is
+    a write, because that is the safe guess about a capability this version has
+    never heard of.
 
-   * - Component
-     - Responsibility
-     - Key files
-   * - **Backend Module**
-     - Chat UI (Admin Tools > AI Chat)
-     - ``Classes/Controller/``, ``Resources/Private/Templates/``
-   * - **Floating Panel**
-     - Toolbar chat widget, persistent across navigation
-     - ``Resources/Public/JavaScript/`` (Lit)
-   * - **Agent Loop**
-     - LLM call → tool use → reply, with retry logic
-     - ``Classes/Service/AgentLoopService.php``
-   * - **MCP Client**
-     - Spawns ``typo3-mcp-server``, handles stdio protocol
-     - ``Classes/Mcp/``
-   * - **Conversation Store**
-     - Persists messages, pins, auto-archive
-     - ``Classes/Domain/Repository/``
-   * - **CLI Commands**
-     - ``webconsulting-ai-chat:process`` (exec),
-       ``webconsulting-ai-chat:worker`` (long-running)
-     - ``Classes/Command/``
-   * - **Access Control**
-     - Group-based access, concurrency caps, length limits
-     - ``Classes/Service/AccessControlService.php``
+``dataClass``
+    How sensitive is its output? Derived from the same subsystems. Without it
+    every projected tool would fall to nr-llm's fail-closed default for an
+    unknown group and be withheld from any provider that is not maximally
+    trusted.
 
-Dependency rules
-================
+``requiresAdmin``
+    From the MCP ``#[AdminOnly]`` attribute, plus the subsystems whose reach is
+    the whole installation or the host.
 
-Enforced via `PHPAt <https://github.com/carlosas/phpat>`_ — runs automatically
-with PHPStan:
+Only read-only tools are enabled by default; a write stays dark until an
+administrator switches it on.
 
--   ``Domain`` MUST NOT depend on ``Controller`` or ``Command``
--   ``Controller`` may depend on ``Domain`` and ``Service``
--   ``Service`` may depend on ``Domain``; MUST NOT depend on ``Controller``
--   ``Mcp`` may depend on ``Domain`` and ``Service``; MUST NOT depend on
-    ``Controller``
--   ``Tests`` may depend on anything
+The catalogue metadata is cached, keyed by the registered tool names **and the
+acting backend user** — several MCP tools build their schema from what the
+current user may reach, so a key without the user would serve one editor's table
+list to another.
 
-Architecture tests: ``Tests/Architecture/LayerDependencyTest.php``
+The identity contract
+=====================
+
+This is the part worth understanding before changing anything here.
+
+nr-llm threads the acting user explicitly through :php:`ToolExecutionContext`,
+precisely so a run authorises identically in a request and on a queue worker.
+The MCP tools do the opposite: they read the ambient :php:`$GLOBALS['BE_USER']`,
+and the MCP server's own ``#[AdminOnly]`` gate reads it too.
+
+Bridging the two makes the ambient user load-bearing. :php:`McpCatalogTool`
+therefore refuses to execute unless the ambient user is provably the run's
+actor — no actor, no ambient user, a mismatch, or an unresolvable uid all
+produce an error result.
+
+**That is why a turn is synchronous.** In a queue worker there is no ambient
+user, so every tool call would fail closed. ``AgentRuntime::enqueue()`` is not
+used and must not be.
+
+What is persisted where
+=======================
+
+..  code-block:: text
+
+    tx_webconsultingaichat_conversation   identity, lifecycle, pending approval
+    tx_webconsultingaichat_message        one row per message
+    nr-llm's run tables                   every step: arguments, results,
+                                          timings, artifacts, approvals
+
+The transcript is ours; the trace is nr-llm's. A message row carries
+``run_uuid`` and that is the join — ``conversations/events`` reads the trace back
+through ``AgentRuntime::events()`` under the caller's own actor.
+
+The tool round-trip *is* stored, and that is not a contradiction: an assistant
+tool-call turn and the tool turn answering it are the transcript the next turn
+replays, and a provider rejects a tool turn whose call is missing. What is not
+copied is the trace proper — full arguments, durations, artifacts, thinking, raw
+provider bodies.
+
+Locking
+=======
+
+One conversation, one turn. ``claimForTurn()`` is a compare-and-swap into
+``status=processing``: two tabs pressing send at the same moment cannot both run
+against the same transcript, and the loser is told the conversation is busy.
+
+Nothing else holds that lock, so a request that dies leaves it held.
+``webconsulting-ai-chat:cleanup`` is what releases it.

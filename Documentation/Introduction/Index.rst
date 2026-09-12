@@ -1,128 +1,72 @@
 ..  include:: /Includes.rst.txt
 
+..  _introduction:
+
 ============
 Introduction
 ============
 
-..  note::
-
-    **Proof of concept.** This extension explores a concrete question: is
-    agent-like behavior possible within the TYPO3 backend? It is not
-    intended to answer whether this is the right architectural approach —
-    the space is moving fast, and the tradeoffs between MCP, tool-calling,
-    browser-side agents, and custom integrations are far from settled. The
-    goal here is to show that it *works*, and to invite feedback from
-    anyone thinking about the same problem. If you have thoughts,
-    `open an issue <https://github.com/dirnbauer/typo3-ai-chat/issues>`__.
-
-What does it do?
-================
-
-AI Chat adds a backend module to TYPO3 that lets
-administrators and editors interact with an AI assistant
-directly from the TYPO3 backend. The module is available
-under **Admin Tools > AI Chat**.
-
-Through the Model Context Protocol (MCP), the assistant can
-read and modify TYPO3 content -- pages, content elements,
-records -- using natural language instructions. All
-processing happens server-side via CLI commands, keeping the
-web server responsive.
-
-..  figure:: /Images/AgentDemo.gif
-    :alt: AI agent creating a page, adding content, and optimizing SEO in TYPO3
-    :class: with-shadow
-
-    The AI agent creates a page, adds content, optimizes SEO fields, and
-    evaluates the result — all via natural language in the TYPO3 backend.
-
-Key features
+What it does
 ============
 
-..  card-grid::
-    :columns: 2
+TYPO3 AI Chat lets a backend user ask their installation a question in plain
+language — and lets the model answer it by *using the installation*, through the
+same MCP tools an external AI client would use.
 
-    ..  card:: Integrated chat module
+"Which pages still mention the old product name?" is answered by running a
+search, not by guessing. "Rename this page" pauses and asks you first.
 
-        A dedicated backend module under Admin Tools
-        with a modern chat interface. Send messages,
-        view responses, and manage conversations without
-        leaving TYPO3.
+Two surfaces, one chat
+======================
 
-    ..  card:: Content management via MCP
+A panel in the backend toolbar, and a full module under **Tools**. They are the
+same conversation list, the same transcript and the same controls; the panel
+follows you between modules, the module gives the transcript room to breathe.
 
-        Connect to hn/typo3-mcp-server to give the AI
-        access to TYPO3 content operations -- creating
-        pages, editing records, reading site structure,
-        and more.
+What makes it trustworthy
+=========================
 
-    ..  card:: Conversation history
+**It acts as you.** Every tool call runs under your own backend user, through
+the MCP server's own code — so your page permissions, your table access, your
+workspace and your language restrictions apply exactly as they do everywhere
+else in TYPO3. There is no service account standing in for you.
 
-        Conversations are persisted in the database.
-        Resume previous chats, pin important ones, or
-        let the system auto-archive inactive
-        conversations.
+**A write always stops and asks.** A tool that changes something suspends the
+turn. You see which tool, with which arguments, and decide. The decision is
+bound to the turn you actually looked at, so a browser tab left open since
+yesterday cannot approve work it never showed you.
 
-    ..  card:: Floating chat panel
+**Reads are on, writes are off.** Until an administrator enables them in
+nr-llm's Tools module, only read-only tools are offered at all.
 
-        A toolbar button opens a resizable bottom panel
-        that stays visible across all module navigation.
-        Chat while working in the page tree without
-        switching context.
+**Nothing is hidden.** Every step of a run — the model's request, each tool
+call, its arguments and its result — is persisted by nr-llm and readable
+afterwards, per run.
 
-    ..  card:: File attachments
+What it is built on
+===================
 
-        Attach PDF, DOCX, TXT, and XLSX files to your
-        messages. Text is extracted server-side when
-        needed, so all formats work regardless of the
-        LLM provider. Vision-capable providers also
-        accept images (PNG, JPEG, WebP).
+`nr-llm <https://github.com/netresearch/t3x-nr-llm>`__ owns the agent loop, the
+approvals, the run records, the budgets and the provider abstraction.
+`hn/typo3-mcp-server <https://github.com/dirnbauer/typo3-mcp-server>`__ owns the
+tools. This extension is the part in between: it projects the installation's MCP
+catalogue into nr-llm's runtime, runs one turn per request, and presents the
+result.
 
-    ..  card:: Markdown rendering
+Attribution
+===========
 
-        AI responses are rendered as rich Markdown --
-        headings, lists, code blocks, and tables --
-        using marked.js with DOMPurify for XSS safety.
+This project is derived from
+`Netresearch nr-mcp-agent <https://github.com/netresearch/t3x-nr-mcp-agent>`__.
+Thank you, Netresearch, for publishing the original extension and for the nr-llm
+foundation this still depends on. The upstream Git history is retained in this
+repository; the full attribution is in ``THANKS-NETRESEARCH.md``.
 
-    ..  card:: Secure by design
+Requirements
+============
 
-        Access is restricted to configured backend user
-        groups. Messages are length-limited, concurrent
-        conversations are capped, and API keys are never
-        exposed to the browser.
-
-Example interactions
-====================
-
-Once configured with MCP enabled, you can ask the assistant
-to perform tasks like:
-
-*   "Show me all pages under the homepage"
-*   "Create a new text content element on page 42 with
-    the heading 'Welcome'"
-*   "What content elements exist on page 15?"
-*   "Move the news page to be a subpage of 'About Us'"
-*   "List all hidden pages in the site"
-
-Without MCP, the assistant works as a general-purpose
-AI chat (using the configured LLM provider from nr-llm),
-but cannot interact with TYPO3 content.
-
-Acknowledgments
-===============
-
-This extension builds on the work of others:
-
-`hauptsache.net <https://hauptsache.net/>`__
-    For creating `hn/typo3-mcp-server
-    <https://github.com/hauptsache-net/typo3-mcp-server>`__,
-    the MCP server that exposes TYPO3 content operations
-    as tools.
-
-`nr-llm <https://github.com/netresearch/t3x-nr-llm>`__
-    The Netresearch LLM abstraction layer for TYPO3 that
-    provides provider-agnostic access to language models.
-
-`nr-vault <https://github.com/netresearch/t3x-nr-vault>`__
-    Secure credential storage for TYPO3, used to protect
-    API keys for LLM providers.
+-   PHP 8.4
+-   TYPO3 14.3.7 or newer
+-   ``netresearch/nr-llm`` 0.34, with a configured Task
+-   ``hn/typo3-mcp-server`` 0.7 — required, not optional
+-   optional: ``phpoffice/phpspreadsheet`` for XLSX attachment extraction

@@ -8,11 +8,11 @@ namespace Webconsulting\Typo3AiChat\Enum;
  * The lifecycle of one conversation row.
  *
  * Deliberately four states, not seven. The old model tracked WHERE the work was
- * happening — queued, locked by a worker, inside the tool loop, inside a Flue
- * run — because the work happened somewhere else. A turn now runs inside the
- * request that asked for it, so the only distinctions left are the ones a user
- * can act on: it is your turn, it is the model's turn, it is waiting for your
- * decision, or it broke.
+ * happening — queued, locked by a worker, inside the tool loop, inside a
+ * durable workflow — because the work happened somewhere else. A turn now runs
+ * inside the request that asked for it, so the only distinctions left are the
+ * ones a user can act on: it is your turn, it is the model's turn, it is
+ * waiting for your decision, or it broke.
  */
 enum ConversationStatus: string
 {

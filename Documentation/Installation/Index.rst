@@ -1,111 +1,97 @@
 ..  include:: /Includes.rst.txt
 
+..  _installation:
+
 ============
 Installation
 ============
 
-Requirements
-============
-
-*   TYPO3 v13.4+ or v14.x
-*   PHP 8.2+
-*   `netresearch/nr-llm <https://github.com/netresearch/
-    t3x-nr-llm>`__ (^0.25) -- LLM abstraction layer
-
-Optional:
-
-*   `hn/typo3-mcp-server <https://github.com/
-    hauptsache-net/typo3-mcp-server>`__ (^1.0) --
-    for TYPO3 content management tools
-*   `netresearch/nr-vault <https://github.com/netresearch/
-    t3x-nr-vault>`__ (^0.4) -- for secure API key storage
-
-Quick start
-===========
-
-1.  Install the extension via Composer (see below).
-2.  In nr-llm, create a **Task** record that configures
-    your LLM provider (e.g. OpenAI, Anthropic). Note
-    the UID.
-3.  Go to **Admin Tools > Settings > Extension
-    Configuration > webconsulting_ai_chat** and set ``llmTaskUid``
-    to the Task UID from step 2.
-
-The AI Chat module is now available under
-**Tools > TYPO3 AI Chat**. The same chat is also available from the top-right
-toolbar button.
-
-Composer installation
+Install the extension
 =====================
 
 ..  code-block:: bash
 
     composer require webconsulting/typo3-ai-chat
-
-After installation, run the database migrations:
-
-..  code-block:: bash
-
+    vendor/bin/typo3 extension:setup
     vendor/bin/typo3 database:updateschema
 
-To enable MCP integration (content management tools):
+``hn/typo3-mcp-server`` comes along as a hard requirement — the tools are the
+point, so they are not optional.
 
-1.  Set ``enableMcp = 1`` in the extension configuration.
-2.  Open the **List module** at pid = 0 and create an
-    **MCP Server** record. For the built-in TYPO3 MCP
-    server, set *Transport* to ``stdio``, leave *Command*
-    empty (defaults to ``vendor/bin/typo3``), and set
-    *Arguments* to ``mcp:server`` (one argument per line).
-3.  If you use `hn/typo3-mcp-server
-    <https://github.com/hauptsache-net/typo3-mcp-server>`__
-    as the stdio backend, install it first::
+The MCP server fork is distributed over Git rather than Packagist, so the
+consuming project needs a repository entry:
 
-        composer require hn/typo3-mcp-server
+..  code-block:: json
 
-    Then configure the server record as described above.
+    {
+        "repositories": [
+            {"type": "vcs", "url": "https://github.com/dirnbauer/typo3-mcp-server.git"},
+            {"type": "vcs", "url": "https://github.com/dirnbauer/typo3-abilities.git"}
+        ]
+    }
 
-DDEV development setup
-======================
+Point it at an LLM
+==================
 
-The project includes a DDEV configuration for local
-development:
+The chat does not configure a provider of its own; it runs on an nr-llm
+**Task**, so provider keys, models, budgets and governance stay in one place for
+the whole installation.
 
-..  code-block:: bash
+#.  In **AI > Providers**, create a provider and store its API key.
+#.  In **AI > Models**, add the model you want to use and tick its
+    ``tools`` capability. A model that cannot call tools can chat, but it cannot
+    do anything.
+#.  In **AI > Configurations**, create a configuration pointing at that model.
+#.  In **AI > Tasks**, create a task using that configuration. Its prompt
+    template becomes the chat's system instruction.
+#.  In **Admin Tools > Settings > Extension Configuration >
+    webconsulting_ai_chat**, set ``llmTaskUid`` to the task's UID.
 
-    git clone https://github.com/dirnbauer/typo3-ai-chat.git
-    cd typo3-ai-chat
-    ddev start
-    ddev composer install
-    ddev typo3 database:updateschema
+Until ``llmTaskUid`` points at a usable task the toolbar button stays hidden and
+the status endpoint says why.
 
-The extension is symlinked into the TYPO3 installation
-automatically via the Composer ``typo3/cms`` extra
-configuration.
+Decide which tools may run
+==========================
 
-Running tests and quality checks:
+Freshly installed, only read-only tools are offered. That is deliberate: a write
+should be a decision somebody made, not something inherited from an install.
 
-..  code-block:: bash
+In **AI > Tools**, enable the write tools you want available — the whole group
+``typo3_mcp`` can be toggled at once, and individual tools within it. Enabling a
+write tool does not make it run unattended; it makes it *available to ask for*
+(see :ref:`usage-approvals`).
 
-    # All CI checks (PHPStan + CGL + tests)
-    ddev composer ci
+Upgrading from 1.x
+==================
 
-    # Individual checks
-    ddev composer ci:phpstan     # Static analysis + architecture tests
-    ddev composer ci:cgl         # Code style check
-    ddev composer ci:tests:unit  # Unit tests only
-    ddev composer ci:tests       # Unit + functional tests
-    ddev composer ci:mutation    # Mutation testing (Infection)
+..  warning::
 
-    # Fix code style
-    ddev composer fix:cgl
+    Migration from ``nr_mcp_agent`` is only available in the **1.x** line. A
+    site still holding nr-mcp-agent data must run that migration on 1.x before
+    upgrading to 2.0.
 
-Alternatively, use the Docker-based test runner (works without DDEV):
+After the schema update, run the upgrade wizard
+**"AI Chat: migrate conversation transcripts to message rows"** in
+**Admin Tools > Upgrade**. It converts each 1.x transcript blob into message
+rows and can be re-run safely — a conversation that already has rows is left
+alone.
 
-..  code-block:: bash
+The wizard empties the legacy ``messages`` column but does not drop it. Drop it
+with the database analyser once you are satisfied with the result.
 
-    ./Build/Scripts/runTests.sh -s unit        # Unit tests
-    ./Build/Scripts/runTests.sh -s phpstan     # PHPStan
-    ./Build/Scripts/runTests.sh -s cgl         # Code style check
-    ./Build/Scripts/runTests.sh -s mutation    # Mutation testing
-    ./Build/Scripts/runTests.sh -s unit -p 8.3 # Specific PHP version
-    ./Build/Scripts/runTests.sh -h             # Show all options
+What else changes on upgrade
+----------------------------
+
+-   ``tx_webconsultingaichat_mcp_server`` is no longer used. The database
+    analyser will offer to drop it; there is nothing in it to keep.
+-   ``webconsulting-ai-chat:process`` and ``webconsulting-ai-chat:worker`` are
+    gone. Remove any scheduler task or systemd unit that runs them.
+-   ``webconsulting-ai-chat:cleanup`` is now the one command, and it is worth
+    scheduling (see :ref:`configuration`).
+
+Attachments
+===========
+
+Uploads land in the FAL folder named by ``uploadFolder``, below a per-user and
+per-conversation path. Make sure that storage is writable and is **not** one
+you publish.

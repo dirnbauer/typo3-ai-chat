@@ -6,40 +6,63 @@
 Changelog
 =========
 
-All notable changes to this extension are documented here.
+The full, per-release changelog lives in ``CHANGELOG.md`` in the repository
+root. What follows is the part an integrator has to act on.
 
-The format follows `Keep a Changelog <https://keepachangelog.com/>`_ and
-the project adheres to `Semantic Versioning <https://semver.org/>`_.
+.. _version-2-0-0:
 
-.. _version-0-1-0:
+Version 2.0.0
+=============
 
-Version 0.1.0 (2026-03-24)
-===========================
+TYPO3's own MCP tools are executed **in-process** now, as the acting backend
+user, through nr-llm's agent runtime — with human approval for every write.
 
-Initial alpha release.
+Breaking changes
+----------------
 
-Added
------
+-   **TYPO3 13 is no longer supported.** 2.0 requires TYPO3 14.3.7+ and PHP 8.4.
+-   **``hn/typo3-mcp-server`` is a hard requirement** (^0.7), not a suggestion.
+-   **The MCP server registry is gone.** ``tx_webconsultingaichat_mcp_server``
+    and its TCA are removed; the installation's own catalogue is the tool set.
+    Drop the table with the database analyser.
+-   **The CLI processing lane is gone.** ``webconsulting-ai-chat:process`` and
+    ``webconsulting-ai-chat:worker`` are removed — remove any scheduler task or
+    systemd unit that runs them.
+-   **The Flue workflow lane is removed**, with ``enableFlue`` and
+    ``flueFlowUid``.
+-   **The legacy frontend is removed.** The 2.0 UI is a React/shadcn bundle
+    mounting ``<wc-ai-chat>`` in a Shadow DOM.
+-   **Migration from ``nr_mcp_agent`` is only available in the 1.x line.** A
+    site still holding nr-mcp-agent data must migrate on 1.x *before* upgrading.
 
-- AI chat panel in the TYPO3 backend powered by ``netresearch/nr-llm``.
-- Persistent conversation management: create, list, archive, pin conversations.
-- Asynchronous processing via ``webconsulting-ai-chat:worker`` CLI command with
-  atomic compare-and-swap queue dequeue.
-- MCP (Model Context Protocol) integration via ``hn/typo3-mcp-server``:
-  agent loop with tool call execution and resume support.
-- File upload support (PDF, PNG, JPEG, WebP — max 20 MB) stored in
-  FAL under per-user ``ai-chat/{uid}/`` folder; passed as multimodal
-  content to the LLM provider.
-- ``DocumentCapableInterface`` detection: PDF uploads only offered
-  when the active provider advertises document support.
-- Configurable access control: restrict chat to specific backend
-  user groups.
-- Extension configuration: LLM Task UID, max message length, max
-  active conversations per user, MCP toggle.
-- Lit-based web component frontend (``<wc-chat-app>``) with
-  conversation list, message polling, file attachment UI.
-- PHPStan Level 10, PHP-CS-Fixer, Rector, Infection mutation
-  testing (≥70% MSI) — full CI pipeline on PHP 8.2–8.4 × TYPO3
-  13.4/14.0 matrix.
-- Architecture tests (phpat) enforcing domain/controller layer
-  separation.
+What you have to do
+-------------------
+
+#.  Run ``vendor/bin/typo3 database:updateschema``.
+#.  Run the upgrade wizard **"AI Chat: migrate conversation transcripts to
+    message rows"** in **Admin Tools > Upgrade**. It is idempotent, and it
+    empties but does not drop the legacy ``messages`` column.
+#.  Remove any scheduler task running the deleted processing commands.
+#.  Schedule ``webconsulting-ai-chat:cleanup`` daily. It is the only thing that
+    releases a conversation left claimed by a request that died.
+#.  In **AI > Tools**, enable the write tools you want available. Freshly
+    upgraded, only read-only tools are offered.
+
+Highlights
+----------
+
+-   Every tool call runs as the acting backend user, through the MCP server's
+    own code — so TYPO3's permissions, workspaces and language restrictions
+    apply inside it.
+-   A write suspends the turn and asks. The decision is bound to the turn it
+    decided, so a stale browser tab cannot approve work it never displayed.
+-   A turn is streamed as server-sent events from the same route that starts it,
+    and returns the identical event list as JSON when the client does not ask
+    for a stream.
+-   Each message is its own row, so a transcript can be queried, paged and
+    pruned instead of rewritten whole on every append.
+
+Earlier versions
+================
+
+See ``CHANGELOG.md`` for 0.1.0 through 0.7.0.

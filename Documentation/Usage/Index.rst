@@ -1,112 +1,101 @@
 ..  include:: /Includes.rst.txt
 
+..  _usage:
+
 =====
 Usage
 =====
 
-The operator console
-====================
+Opening the chat
+================
 
-Select the chat/tools icon in the top-right TYPO3 toolbar for the inline drawer,
-or open **Tools > TYPO3 AI Chat** for the full operator console. Both surfaces
-use the same conversations, attachments, approvals and execution ledger. The
-drawer's expand button opens the full module when more room is useful.
+The chat icon in the top-right toolbar opens a panel over whatever module you
+are in, and it stays open as you move between modules. **Tools > TYPO3 AI Chat**
+opens the same chat with more room.
 
-..  figure:: /Images/InlineDrawer.jpg
-    :alt: TYPO3 AI Chat inline drawer opened from the top-right toolbar
+Both are the same conversations, the same transcripts and the same controls —
+the panel for a quick question, the module for a long session.
 
-    The inline drawer keeps chat, lane selection, attachments, and execution
-    status available over the current backend module.
+..  figure:: /Images/ToolbarButton.png
+    :alt: The AI Chat button in the TYPO3 backend toolbar
 
-The full interface has three working areas:
+    The toolbar button appears once an administrator has configured an nr-llm
+    task and granted you access.
 
-* the dark conversation rail on the left;
-* the assistant-ui thread and attachment composer in the centre;
-* the execution ledger on the right.
+Asking something
+================
 
-..  figure:: /Images/OperatorConsole.jpg
-    :alt: Full TYPO3 AI Chat operator console with execution ledger
+Type a question and send it. The chat sees the module you are in, the page you
+have open and the workspace you are working in, so "rename this page" means the
+page in front of you.
 
-    The full Tools module combines conversation history, the assistant thread,
-    and a persistent execution ledger.
+That context is offered to the model, not obeyed by it: the chat only acts on it
+when your message refers to it.
 
-The ledger is the important difference from a normal chat. It records the tools
-the agent used, their arguments, their returned result, and failures. A write or
-other governed call can pause as **Approval required**. Inspect its arguments,
-then choose **Approve once** or **Deny**. TYPO3 permissions and nr-llm policy are
-evaluated again when the run resumes.
+What happens during a turn
+==========================
 
-Direct tools
-============
+A turn is streamed as it happens, so you can watch it rather than wait for it:
 
-The default **Direct** lane runs through nr-llm's ``AgentRuntime`` as the
-authenticated backend user.
+-   the model thinks, and its answer appears as it is produced;
+-   when it wants to use a tool, you see which tool and with which arguments,
+    before it runs;
+-   when the tool answers, you see a preview of what it returned;
+-   the model may then use another tool, or answer.
 
-1. Create or select a conversation.
-2. Describe what you want inspected or changed.
-3. Add files if helpful.
-4. Send the request.
-5. Follow the live status and execution ledger.
-6. Review any requested approval before allowing it.
+How many times it may go round is capped by :confval:`maxIterations`.
 
-The direct lane is appropriate for interactive questions, TYPO3 inspection and
-bounded tool execution.
+If you close the tab, the turn is cancelled. You do not keep paying for an
+answer nobody is reading.
 
-Durable Flue workflows
+Reading, and changing
+=====================
+
+Reading is immediate. Asking for a page, searching content, listing records — a
+read-only tool runs as soon as the model asks for it, under your own
+permissions, and you see the result.
+
+Changing is not. A tool that writes suspends the turn and asks you first — see
+:ref:`usage-approvals`.
+
+..  note::
+
+    A tool can only ever do what *you* can do. It runs as your backend user, so
+    your page permissions, table access, workspace and language restrictions
+    apply inside it exactly as they do in the rest of TYPO3.
+
+Attachments
+===========
+
+You can attach a PDF, a Word document, a spreadsheet or a plain text file. The
+text is extracted server-side and attached to your message, so it works whatever
+the provider supports.
+
+The file type is detected from the file's own bytes rather than what the browser
+claims, and a file that cannot be read is refused at upload rather than halfway
+through a turn.
+
+Managing conversations
 ======================
 
-When the administrator enables Flue, the top bar offers **Direct** and **Flue**.
-Choose Flue, enter the target page UID and send an instruction.
+Rename, pin, archive or delete a conversation from its entry in the list.
 
-Flue creates a durable run, resolves page/workspace context, mints the MCP token,
-applies the configured MCP tool allowlist, and keeps write tools in a draft
-workspace. The chat polls the mirrored run and adds its result to both the thread
-and execution ledger.
+Delete is a soft delete: the conversation stops appearing immediately, and the
+cleanup command removes it — with its messages and its uploaded files — once
+the configured retention has passed.
 
-Flue intentionally accepts page workflow requests, not arbitrary shell commands.
-It is the Cursor-like MCP lane without a permission bypass.
+When something goes wrong
+=========================
 
-Images and documents
-====================
+A failed turn says what failed in the conversation itself. Error messages are
+sanitised before you see them: API keys and URLs are redacted, so an error that
+quotes a provider's response cannot leak a credential into a transcript.
 
-Use the paperclip button or drag files onto the composer. Multiple files can be
-attached to one request.
+A conversation stuck on "processing" means the request that was running it died
+— a timeout, a deployment, a closed connection. ``webconsulting-ai-chat:cleanup``
+releases those; if it runs daily, this fixes itself.
 
-* Images show a thumbnail before send.
-* PDFs show an embedded first-page preview before send.
-* DOCX, TXT and XLSX show a document card.
-* Remove any pending file with the close button.
+..  toctree::
+    :maxdepth: 1
 
-TYPO3 validates the detected MIME type, size, FAL permission and document
-readability server-side. Files are stored below
-``fileadmin/typo3-ai-chat/<backend-user-uid>/``. The limits are 20 MB per file
-and five files per conversation.
-
-Conversations
-=============
-
-The rail lists recent conversations and their message count. Create a new
-conversation with **New conversation**. Select a previous conversation to load
-its complete thread and run ledger. The archive action removes a conversation
-from the default list without deleting its stored record.
-
-Migration from nr-mcp-agent
-===========================
-
-Keep the original extension installed until the replacement works:
-
-..  code-block:: bash
-
-    vendor/bin/typo3 extension:setup
-    vendor/bin/typo3 webconsulting-ai-chat:migrate-nr-mcp-agent
-
-The command is idempotent, preserves target records and copies conversations and
-MCP server definitions. Only then remove ``netresearch/nr-mcp-agent``.
-
-Thank you, Netresearch
-======================
-
-This extension is derived from Netresearch's nr-mcp-agent. Thank you,
-Netresearch, for the original backend chat, document pipeline, processing
-strategies and test foundation, and for nr-llm and nr-vault. The backend itself
-also displays this credit.
+    Approvals

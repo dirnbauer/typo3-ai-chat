@@ -1,73 +1,128 @@
 ..  include:: /Includes.rst.txt
 
+..  _developer-agent-loop:
+
 ==========
 Agent loop
 ==========
 
-Since version 0.6.3 the backend AI Chat does not run its own tool loop.
-``ChatService`` delegates the whole chat turn to nr-llm's ``AgentRuntime``
-(nr-llm ADR-101), which drives the model over nr-llm's builtin tool
-registry and returns the settled result synchronously.
+This extension does not implement an agent loop. nr-llm's ``AgentRuntime`` does
+— the model round-trips, the tool gate, the approval suspension, the run
+persistence and the budget accounting are all its (nr-llm ADR-101). What follows
+is the seam on either side of it.
 
-Processing a turn
-=================
+Building the request
+====================
 
-``ChatService::processConversation()`` performs the following steps:
+:php:`ChatTurnService::run()` assembles an ``AgentRunRequest``:
 
-1.  If no nr-llm Task is configured (``llmTaskUid`` is ``0``), the
-    conversation is set to ``failed`` with a descriptive message.
-2.  Resolve the ``LlmConfiguration`` the chat should use from the
-    configured Task (``llmTaskUid`` -> ``Task`` -> ``getConfiguration()``).
-    A missing Task or Configuration fails loudly rather than silently
-    degrading to a no-tools chat.
-3.  Set the conversation status to ``processing``.
-4.  Build the message transcript: a ``system`` message carrying the
-    identity/behaviour contract and the resolved Task/Configuration
-    prompts (see Architecture > System prompt priority), followed by the
-    stored conversation messages. File attachments are expanded to the
-    multimodal wire shape and forwarded as array messages.
-5.  Call ``AgentRuntimeInterface::run()`` with an ``AgentRunRequest`` built
-    from the configuration, the messages and the initiating backend user
-    uid. ``allowedToolNames`` is left at ``null`` so the run is offered the
-    whole globally-enabled tool set; nr-llm's own tool gate (RBAC,
-    global enable cascade, per-configuration groups) stays authoritative.
-6.  Map the returned ``AgentRunResult`` onto the conversation.
+``configuration``
+    From the configured nr-llm Task: ``llmTaskUid`` → ``Task`` →
+    ``getConfiguration()``. A missing task or configuration fails loudly rather
+    than degrading quietly into a chat that cannot do anything.
 
-Outcome mapping
-===============
+``messages``
+    From :php:`TranscriptBuilder`: up to three system messages — the task's
+    prompt, the conversation's prompt, the "where the user is standing" snippet,
+    general before specific — followed by the tail of the persisted transcript.
 
-``AgentRuntime::run()`` never throws for a run outcome; it returns a
-settled ``AgentRunResult``. ``ChatService`` maps it as follows:
+``actor``
+    From :php:`BackendUserContext`, the one place this extension reads
+    ``$GLOBALS['BE_USER']``. Uid, admin flag, groups and nr-llm grants are frozen
+    here, at the HTTP boundary, where the ambient user genuinely is the caller.
 
-*   ``COMPLETED`` -- append the final assistant answer
-    (``ToolLoopResult::$finalContent``) and set status ``idle``.
-*   any other outcome (``FAILED``, ``GUARDRAIL_BLOCKED``,
-    ``AWAITING_APPROVAL``, …) -- set status ``failed`` with a sanitized
-    reason taken from ``AgentRunResult::$error`` or derived from the
-    outcome. The mapping keeps a default arm because ``AgentRunOutcome``
-    gains cases in nr-llm minor releases.
+``allowedToolNames``
+    From :php:`ToolAccessService` — see :ref:`configuration-tool-access`.
 
-The tools the model can call, their execution, retry/back-off on
-transient provider errors, budget enforcement and the iteration cap all
-live inside nr-llm now.
+``options``
+    ``ToolOptions`` carrying the backend user uid for the budget pre-flight,
+    annotated ``withCallerSource('webconsulting_ai_chat', 'turn')`` so the
+    installation's telemetry can tell chat traffic from everything else.
 
-Synchronous execution and resume
-================================
+``maxIterations``
+    From extension configuration, clamped again by nr-llm's own ceiling.
 
-``AgentRuntime::run()`` is synchronous and drives the entire tool loop in
-one call, so a turn never leaves persisted "pending tool calls" in the
-conversation. The CLI worker (``webconsulting-ai-chat:process`` /
-``webconsulting-ai-chat:worker``)
-therefore always calls ``processConversation()``.
-``resumeConversation()`` re-runs the turn over the existing transcript
-for a resumable conversation (``processing``, ``tool_loop`` or
-``failed``), which is used to recover a conversation left ``processing``
-by a crashed worker.
+The transcript window
+=====================
 
-MCP tool provider
-=================
+A conversation grows without bound; a context window does not. Only the tail is
+replayed.
 
-The ``McpToolProvider`` / ``McpConnection`` classes remain in the
-codebase but are no longer used by the chat turn. Direct MCP-server
-tooling for the backend is superseded by nr-llm's builtin tool registry;
-the MCP integration is retained for the planned move into nr-llm.
+That truncation has one sharp edge worth knowing about: cutting in the middle of
+a tool round-trip leaves a ``tool`` turn whose assistant tool-call turn fell off
+the front — an answer to a question that was never asked, which providers reject
+outright. :php:`TranscriptBuilder` therefore drops orphaned tool turns from the
+front of the window.
+
+Reading the steps back
+======================
+
+``AgentRuntime::run()`` reports each step through an ``$onStep`` closure as it is
+recorded, and returns the full list when it settles.
+
+:php:`TurnStepRecorder` turns those into client events, and does two jobs at
+once:
+
+-   **deduplication**, because a step arrives twice — live through the callback
+    and again in the settled result;
+-   **call correlation**, because a tool step carries the tool's *name* but not
+    the id of the call it answers. Within a round the loop executes the requested
+    calls in the order the model asked for them, so a per-name queue reunites
+    them.
+
+A run resumed after an approval starts a fresh step list, so the assistant turn
+that requested the calls is in the previous segment. The pending calls from the
+stored approval card are seeded into the correlation for that reason — without
+them the approved or denied tool turns would have no call to answer, be dropped,
+and leave a transcript the next turn's provider refuses.
+
+Outcomes
+========
+
+``AgentRuntime::run()`` never throws for a run outcome; it returns a settled
+result. :php:`RunOutcomeMapper` is the **only** place that names an
+``AgentRunOutcome`` case:
+
+..  list-table::
+    :header-rows: 1
+    :widths: 38 22 40
+
+    *   - Outcome
+        - Conversation
+        - Note
+    *   - ``COMPLETED``
+        - idle
+        -
+    *   - ``AWAITING_APPROVAL``
+        - awaiting_approval
+        - Pending calls and digest stored on the row.
+    *   - ``AWAITING_INPUT``
+        - awaiting_approval
+        - Continue it in nr-llm's Agent Runs module.
+    *   - ``GUARDRAIL_BLOCKED``
+        - failed
+        - Reason from the guardrail, sanitised.
+    *   - ``GUARDRAIL_APPROVAL_REQUIRED``
+        - failed
+        - Same.
+    *   - ``SUSPEND_FAILED``
+        - failed
+        - An approval was required but could not be stored, so no resume may be
+          offered (nr-llm ADR-092).
+    *   - ``CANCELLED``
+        - idle
+        -
+    *   - ``LEASE_LOST`` / ``REQUEUED``
+        - unchanged
+        - Another executor owns the run; this request must not settle it.
+    *   - ``FAILED``
+        - failed
+        - Reason sanitised.
+    *   - *anything else*
+        - failed
+        - Default arm. nr-llm may add outcomes in a minor release.
+
+The default arm is deliberate redundancy: a run whose meaning this version does
+not know must not leave the conversation idle and invite another message on top
+of it. ``RunOutcomeMapperTest`` walks ``AgentRunOutcome::cases()`` and fails when
+nr-llm adds one, so the decision gets made in review rather than in production.

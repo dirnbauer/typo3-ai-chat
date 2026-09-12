@@ -1,123 +1,110 @@
 ..  include:: /Includes.rst.txt
 
+..  _developer-testing:
+
 =======
 Testing
 =======
 
-Test infrastructure overview
-=============================
-
-The extension uses a layered test approach:
-
-.. list-table::
-   :header-rows: 1
-   :widths: 25 35 40
-
-   *  -  Layer
-      -  Tool
-      -  Runner
-   *  -  Unit tests
-      -  PHPUnit
-      -  ``ddev composer ci:tests:unit`` or ``runTests.sh -s unit``
-   *  -  Functional tests
-      -  PHPUnit + TYPO3 testing framework
-      -  ``ddev composer ci:tests`` (requires database)
-   *  -  Architecture tests
-      -  PHPAt (via PHPStan extension)
-      -  ``ddev composer ci:phpstan`` (runs automatically with PHPStan)
-   *  -  Static analysis
-      -  PHPStan
-      -  ``ddev composer ci:phpstan``
-   *  -  Code style
-      -  PHP-CS-Fixer
-      -  ``ddev composer ci:cgl``
-   *  -  Mutation testing
-      -  Infection
-      -  ``ddev composer ci:mutation``
-
-Running tests with DDEV
-=======================
+Running the suite
+=================
 
 ..  code-block:: bash
 
-    # Unit tests
-    ddev composer ci:tests:unit
+    composer ci:tests:unit          # no database
+    composer ci:tests:functional    # sqlite by default
+    composer ci:tests
 
-    # Unit + functional tests
-    ddev composer ci:tests
+    composer ci:phpstan             # level 10, one root phpstan.neon
+    composer ci:cgl                 # dry run
+    composer fix:cgl                # apply
 
-    # Static analysis (includes architecture tests)
-    ddev composer ci:phpstan
-
-    # Mutation testing
-    ddev composer ci:mutation
-
-Running tests with Docker (runTests.sh)
-=======================================
-
-``Build/Scripts/runTests.sh`` provides a Docker-based test runner that
-mirrors the CI environment exactly. It does not require DDEV.
+CI runs the functional suite against MariaDB 10.11, because that is what
+production runs. The switch is environment only — PHPUnit's ``<env>`` entries do
+not override an existing environment variable, so setting ``typo3DatabaseDriver``
+and friends in the shell points the same suite at a real database:
 
 ..  code-block:: bash
 
-    # Show all options
-    ./Build/Scripts/runTests.sh -h
+    typo3DatabaseDriver=mysqli typo3DatabaseName=func_test \
+    typo3DatabaseUsername=root typo3DatabasePassword=funcp \
+    typo3DatabaseHost=127.0.0.1 composer ci:tests:functional
 
-    # Unit tests
-    ./Build/Scripts/runTests.sh -s unit
+The scripted provider
+=====================
 
-    # Unit tests with a specific PHP version
-    ./Build/Scripts/runTests.sh -s unit -p 8.3
+Testing an agent loop needs a model that can be made to call a tool, then be
+asked again, then answer — deterministically, in order, with no network.
 
-    # PHPStan
-    ./Build/Scripts/runTests.sh -s phpstan
+:php:`Webconsulting\Typo3AiChat\Testing\ScriptedProvider` is a real nr-llm
+provider adapter driven by a queue:
 
-    # Code style check
-    ./Build/Scripts/runTests.sh -s cgl
+..  code-block:: php
 
-    # Fix code style
-    ./Build/Scripts/runTests.sh -s cgl -n
+    ScriptedProvider::script([
+        ['toolCalls' => [['id' => 'call-1', 'name' => 'typo3_GetPage', 'arguments' => ['uid' => 1]]]],
+        ['content' => 'Page 1 is called "Home".'],
+    ]);
 
-    # Mutation testing
-    ./Build/Scripts/runTests.sh -s mutation
+Running out of scripted responses is an **error**, not an empty answer: a loop
+that took one more round than the test scripted has changed behaviour, and
+returning ``""`` would let that change pass as a passing test.
 
-Supported ``-s`` values: ``unit``, ``unitCoverage``, ``cgl``, ``phpstan``,
-``rector``, ``mutation``, ``lint``, ``composer``, ``composerUpdate``,
-``clean``, ``update``.
+The queue is a file rather than a static property, because a functional test
+rebuilds the container and takes any in-memory state with it.
 
-Architecture tests
-==================
+Why it is safe to ship
+----------------------
 
-Architecture tests enforce dependency rules between the extension's layers.
-They are implemented using `PHPAt <https://github.com/carlosas/phpat>`__
-and registered as a PHPStan extension — they run automatically as part of
-``ci:phpstan``, not as a separate PHPUnit testsuite.
+An LLM that says whatever a file tells it to is a way to put words in the
+assistant's mouth, so it is registered from ``Configuration/Services.php`` behind
+**two independent conditions**: a non-production application context **and**
+``WEBCONSULTING_AI_CHAT_SCRIPTED_PROVIDER=1``. Either alone is the kind of switch
+that gets left on by accident.
 
-The rules are defined in ``Tests/Architecture/LayerDependencyTest.php``.
-They ensure, for example, that Domain classes do not depend on Controller
-classes.
+It is also not a replacement for a real provider adapter: it never reaches
+nr-llm's provider registry unless a provider record explicitly names the adapter
+type ``scripted``.
 
-Mutation testing
-================
+What the suites cover
+=====================
 
-`Infection <https://infection.github.io/>`__ is used to verify the
-quality of unit tests by introducing code mutations and checking whether
-tests catch them.
+**Unit** — the places where a mistake is invisible rather than loud:
 
-The minimum thresholds are defined in ``infection.json.dist``:
+-   ``ToolEffectClassifierTest`` — the two fail-safe directions side by side: an
+    *empty* declaration is read-only, an *unknown* subsystem is a write. Against
+    a real ``CapabilityManifestService`` over a temp manifest, because a double
+    would happily agree with a mistaken assumption about the YAML shape.
+-   ``McpCatalogToolTest`` — result mapping, and the ambient-identity refusal
+    that makes the whole bridge safe.
+-   ``RunOutcomeMapperTest`` — every enum case, plus a check that walks
+    ``AgentRunOutcome::cases()`` and fails when nr-llm adds one.
+-   ``TranscriptBuilderTest`` — the window boundary, where a cut round-trip
+    produces a request the *provider* rejects: a failure with no local symptom.
+-   ``ToolAccessServiceTest`` — deny beating allow, and absent-vs-empty.
+-   ``ServerSentEventStreamTest`` — the wire format, where a missing blank line
+    silently buffers and a raw newline silently truncates.
 
-*   **minMsi**: 60 % (Mutation Score Indicator)
-*   **minCoveredMsi**: 70 % (Covered Code MSI)
+**Functional** — against the installation's real MCP catalogue:
 
-Run locally:
+-   the projection: ``typo3_GetPage`` read-only, ``typo3_WriteTable`` a write
+    that is off by default, ``typo3_SafeCli`` admin-only;
+-   a scripted tool call executing and landing in the transcript as both halves
+    of the round-trip;
+-   a write suspending, the approve path completing it, the deny path refusing
+    it into the transcript, and a decision without a digest being refused;
+-   the eleventh turn in a minute being refused, without persisting anything;
+-   the upgrade wizard converting a 1.x transcript, twice, without duplicating.
 
-..  code-block:: bash
+Writing a functional test
+=========================
 
-    ddev composer ci:mutation
+Extend ``AbstractChatFunctionalTestCase``. It sets the scripted provider's
+environment flag **before** ``parent::setUp()`` — that is when the container is
+compiled and ``Configuration/Services.php`` reads it — loads the nr-llm and MCP
+fixtures, and flushes the rate limiter's cache, which is not part of the
+per-test database reset.
 
-Some mutations are intentionally ignored (see ``infection.json.dist``):
-
-*   ``CastArray`` on ``GeneralUtility::makeInstance`` calls -- untestable
-    in unit tests without TYPO3 boot.
-*   Logical conditions on ``PHP_SAPI`` -- compile-time constant, always
-    ``'cli'`` in unit test context.
+Call ``$this->signIn()`` in your own ``setUp()``. It is not a convenience: the
+MCP tools read the ambient backend user, and a test that signs nobody in
+exercises only the refusal path.

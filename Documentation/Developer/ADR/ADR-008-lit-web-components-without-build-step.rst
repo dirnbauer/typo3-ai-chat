@@ -6,7 +6,7 @@
 ADR-008: Lit Web Components Without a Build Step
 ================================================
 
-**Status:** Accepted
+**Status:** Superseded by :ref:`ADR-016 <adr-016>` — the UI is a built React/shadcn bundle in a Shadow DOM.
 
 **Date:** 2026-03-15
 

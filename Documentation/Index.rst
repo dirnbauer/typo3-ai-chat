@@ -29,9 +29,14 @@ AI Chat for TYPO3
 
 ----
 
-TYPO3 AI Chat is a modern governed operator console powered by
-`nr-llm <https://github.com/netresearch/t3x-nr-llm>`__, optional Flue MCP
-workflows, assistant-ui, and TYPO3's own access controls.
+TYPO3 AI Chat lets a backend user ask their installation a question in plain
+language, and lets the model answer it by using the installation — through the
+same MCP tools an external AI client would use, executed in-process, as the
+user themselves, with every write pausing for a human decision.
+
+`nr-llm <https://github.com/netresearch/t3x-nr-llm>`__ owns the agent loop and
+the governance; `hn/typo3-mcp-server
+<https://github.com/dirnbauer/typo3-mcp-server>`__ owns the tools.
 
 It is derived from Netresearch nr-mcp-agent. Thank you, Netresearch, for the
 original extension and the open TYPO3 AI foundation.

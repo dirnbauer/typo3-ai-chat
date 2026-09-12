@@ -6,7 +6,7 @@
 ADR-014: Configurable MCP Server Registry with Auto-Init Default
 ================================================================
 
-**Status:** Accepted
+**Status:** Superseded by :ref:`ADR-015 <adr-015>` — there is no registry; the installation's own catalogue is the tool set.
 
 **Date:** 2026-03-27
 

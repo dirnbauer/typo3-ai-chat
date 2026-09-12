@@ -10,6 +10,12 @@ Architecture Decision Records (ADRs) document the key design choices made
 during development, including the context, alternatives considered, and
 consequences of each decision.
 
+A superseded record is kept, not edited: it says what was true when it was
+written, and the record that replaced it says why that stopped being true.
+2.0 superseded seven of them at once, because moving the tools in-process
+(:ref:`ADR-015 <adr-015>`) removed the reason most of the 1.x architecture
+existed.
+
 ..  toctree::
     :maxdepth: 1
 
@@ -27,3 +33,6 @@ consequences of each decision.
     ADR-012-markdown-rendering-with-marked-and-dompurify
     ADR-013-server-side-document-text-extraction-fallback
     ADR-014-configurable-mcp-server-registry
+    ADR-015-native-in-process-mcp-tool-execution
+    ADR-016-shadcn-chat-ui-in-shadow-dom
+    ADR-017-server-sent-events-for-turn-streaming

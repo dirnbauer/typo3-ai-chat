@@ -2,203 +2,111 @@
 
 [![CI](https://github.com/dirnbauer/typo3-ai-chat/actions/workflows/ci.yml/badge.svg)](https://github.com/dirnbauer/typo3-ai-chat/actions)
 
-A modern, governed operator console for the TYPO3 backend. Editors can converse
-with their installation, inspect live TYPO3 context, execute nr-llm tools, review
-every tool argument/result, approve sensitive work, and optionally dispatch
-durable MCP workflows through Webconsulting Flue.
+Ask your TYPO3 installation a question in plain language — and let the model
+answer it by *using* the installation, through the same MCP tools an external AI
+client would use.
+
+"Which pages still mention the old product name?" runs a search. "Rename this
+page" stops and asks you first.
 
 This project is derived from
 [Netresearch nr-mcp-agent](https://github.com/netresearch/t3x-nr-mcp-agent).
-Thank you, Netresearch, for publishing the original extension, for the excellent
-nr-llm and nr-vault foundations, and for making this work possible. The upstream
-Git history is retained in this repository and the detailed attribution is in
-[THANKS-NETRESEARCH.md](THANKS-NETRESEARCH.md).
+Thank you, Netresearch, for publishing the original extension, for the nr-llm
+foundation this still depends on, and for investing in open TYPO3 AI
+infrastructure. The upstream Git history is retained here and the detailed
+attribution is in [THANKS-NETRESEARCH.md](THANKS-NETRESEARCH.md).
 
-## What is different
-
-- **Operator console, not a bubble widget** — conversation rail, focused thread,
-  live status, and a separate execution ledger.
-- **Real governed execution** — tool calls run as the authenticated TYPO3 actor.
-  Approval-required calls pause visibly and can be allowed once or denied.
-- **MCP through Flue** — optional durable workflows use Flue's MCP token minting,
-  tool allowlists, run store, and draft-workspace write safety.
-- **Rich attachments** — multiple PNG/JPEG/WebP images, PDFs, DOCX, TXT and XLSX
-  files, with image thumbnails and an inline first-page PDF preview before send.
-- **Modern chat foundation** — the interface uses
-  [assistant-ui](https://www.assistant-ui.com/) with a custom TYPO3 runtime,
-  React 19, Vite and Lucide. It does not require Vercel or a JavaScript AI
-  backend at runtime.
-- **Two native surfaces** — the same modern conversation and execution UI is
-  available as a fast top-right inline drawer and as a spacious Tools module.
-- **TYPO3-native authority** — TYPO3 permissions, nr-llm governance, provider
-  configuration, FAL validation and server-side document extraction remain the
-  source of truth.
-- **Safe migration** — an idempotent command copies conversations and MCP server
-  records from nr-mcp-agent before the old extension is removed.
-
-![Full TYPO3 AI Chat operator console](Documentation/Images/OperatorConsole.jpg)
-
-The compact toolbar surface keeps the same conversations and governed execution
-controls available without leaving the current TYPO3 module:
-
-![Inline TYPO3 AI Chat drawer](Documentation/Images/InlineDrawer.jpg)
-
-## Architecture
+## How it works
 
 ```text
-assistant-ui operator console
-        |
-        +-- Direct lane --> TYPO3 AJAX --> nr-llm AgentRuntime
-        |                                  |-- tool registry
-        |                                  |-- guardrails
-        |                                  `-- human approval/resume
-        |
-        `-- Flue lane ----> Webconsulting Flue control plane
-                                           |-- durable run
-                                           |-- MCP allowlist + PAT
-                                           `-- draft-workspace writes
+hn/typo3-mcp-server     the TOOLS     — what can be done to TYPO3
+netresearch/nr-llm      the RUNTIME   — the loop, approvals, runs, budgets
+webconsulting_ai_chat   the SEAM      — projects one into the other
 ```
 
-There is deliberately no unrestricted shell executor. “Cursor-like” means that
-the model can select well-described tools, show its intent and arguments, and
-continue after a human decision. It does not mean bypassing TYPO3 permissions.
+The tools run **in-process**: this extension calls the MCP server's own
+application service directly, so the model reaches exactly the code an external
+client would — same permission checks, same workspace rules, same capability
+manifest. There is no subprocess, no HTTP self-call and no server registry.
+
+A turn therefore runs **synchronously, in the request that started it**. That is
+not a shortcut: the MCP tools read the ambient backend user, and the tool adapter
+refuses to run unless that user is provably the run's actor. In a queue worker
+there is no ambient user, so every tool call would fail closed.
+
+## What makes it trustworthy
+
+- **It acts as you.** Every tool call runs under your own backend user, so your
+  page permissions, table access, workspace and language restrictions apply.
+- **A write always stops and asks.** You see the tool and its exact arguments
+  before anything happens. The decision is bound to the turn you actually looked
+  at, so a stale browser tab cannot approve work it never displayed.
+- **Reads are on, writes are off** until an administrator enables them.
+- **Nothing is hidden.** nr-llm persists every step of every run.
 
 ## Requirements
 
-- PHP 8.2+
-- TYPO3 13.4 or 14
-- `netresearch/nr-llm ^0.25`
-- a configured nr-llm Task
-- optional: `netresearch/nr-vault`
-- optional: `hn/typo3-mcp-server`
-- optional on TYPO3 14/PHP 8.3+: `webconsulting/flue`
+- PHP 8.4
+- TYPO3 14.3.7+
+- `netresearch/nr-llm` ^0.34 with a configured Task
+- `hn/typo3-mcp-server` ^0.7 (required, not optional)
 
 ## Installation
 
 ```bash
 composer require webconsulting/typo3-ai-chat
 vendor/bin/typo3 extension:setup
+vendor/bin/typo3 database:updateschema
 ```
 
-Then open **Admin Tools → Settings → Extension Configuration → Webconsulting
-TYPO3 AI Chat** and set:
+The MCP server fork is distributed over Git, so the consuming project needs
+VCS repository entries for `dirnbauer/typo3-mcp-server` and
+`dirnbauer/typo3-abilities`.
 
-| Setting | Purpose |
-|---|---|
-| `llmTaskUid` | nr-llm Task used by the direct operator lane |
-| `processingStrategy` | `exec` for one process per turn or `worker` |
-| `allowedGroups` | Optional comma-separated backend group UIDs |
-| `maxMessageLength` | Server-side request bound |
-| `maxActiveConversationsPerUser` | Concurrency bound |
-| `enableFlue` | Expose the durable Flue lane |
-| `flueFlowUid` | Existing, governed Flue flow to trigger |
+Then point `llmTaskUid` at an nr-llm Task in **Admin Tools → Settings →
+Extension Configuration**, and enable the write tools you want in
+**AI → Tools**. Full instructions: [Documentation/](Documentation/).
 
-The backend module appears under **Tools → TYPO3 AI Chat**.
+## Upgrading from 1.x
 
-## Safe replacement of nr-mcp-agent
+> **Migration from `nr_mcp_agent` is only available in the 1.x line.** A site
+> still holding nr-mcp-agent data must migrate on 1.x *before* upgrading to
+> 2.0.0.
 
-Keep both extensions installed during verification:
+After the schema update, run the upgrade wizard *"AI Chat: migrate conversation
+transcripts to message rows"*. The CLI processing commands are gone — remove any
+scheduler task that still runs them — and `webconsulting-ai-chat:cleanup` should
+be scheduled daily, because it is the only thing that releases a conversation
+left claimed by a request that died.
+
+## Development
 
 ```bash
-vendor/bin/typo3 extension:setup
-vendor/bin/typo3 webconsulting-ai-chat:migrate-nr-mcp-agent
+composer ci:cgl        # coding standards
+composer ci:phpstan    # level 10
+composer ci:tests      # unit + functional
 ```
 
-The migration command:
+The functional suite runs on sqlite locally and against MariaDB in CI; the
+switch is environment variables only. An agent loop is tested with a scripted
+provider — a real nr-llm adapter driven by a queued response file, registered
+only outside production and only behind an explicit environment flag. See
+[Documentation/Developer/Testing.rst](Documentation/Developer/Testing.rst).
 
-- copies `tx_nrmcpagent_conversation` rows without overwriting target UIDs;
-- copies configured MCP server records;
-- is safe to run repeatedly;
-- leaves all source data untouched.
-
-Only after the new module, conversations, uploads, tool execution and approvals
-have been verified should the original package be removed:
-
-```bash
-composer remove netresearch/nr-mcp-agent
-vendor/bin/typo3 extension:setup
-```
-
-Thank you again to Netresearch: retaining and migrating the original data is a
-first-class requirement, not an afterthought.
-
-## Attachments
-
-Upload validation is performed twice: the browser provides the preview and the
-TYPO3 endpoint verifies size, actual MIME type, FAL permissions and document
-readability. Files are stored per backend user below
-`fileadmin/typo3-ai-chat/<be-user-uid>/`.
-
-| Format | Handling |
-|---|---|
-| PNG, JPEG, WebP | Native vision when the configured provider supports it |
-| PDF | Native document input or server-side text extraction |
-| DOCX | Native document input or PHPWord extraction |
-| TXT | Server-side text extraction |
-| XLSX | PhpSpreadsheet extraction when installed |
-
-The current server limit is 20 MB per file and five files per conversation.
-
-## Flue workflow lane
-
-The Flue lane is shown only when `webconsulting/flue` is installed,
-`enableFlue=1`, and `flueFlowUid` points to a flow. The operator supplies a page
-UID. Flue remains responsible for:
-
-- resolving the page/workspace context;
-- exporting Agent Skills;
-- minting a short-lived MCP PAT;
-- retrieving the provider key from nr-vault;
-- enforcing the flow's MCP tool allowlist;
-- keeping writes in a draft workspace;
-- persisting the durable run and its event stream.
-
-The chat mirrors the final Flue output and adds the run to its execution ledger.
-
-## Frontend development
-
-The built bundle is committed so TYPO3 installations do not need Node.js.
-
-```bash
-npm install
-npm run build
-npm run test:js
-```
-
-Production dependencies have no known npm audit findings at the time of this
-release (`npm audit --omit=dev`). The existing test toolchain may report
-transitive development-only advisories and should be reviewed with each update.
-
-## Quality
-
-```bash
-composer validate --strict
-composer ci:phpstan
-composer ci:cgl
-composer ci:tests
-npm run build
-npm run test:js
-```
+The frontend is a React/shadcn bundle rendering `<wc-ai-chat>` in a Shadow DOM;
+the PHP side renders the mount point and serves the JSON/SSE API.
 
 ## Credits — thank you, Netresearch
 
-The original architecture, conversation lifecycle, FAL upload endpoint,
-document extractors, worker/exec processing modes and much of the PHP test
-foundation came from Netresearch's GPL-licensed nr-mcp-agent. Webconsulting's
-replacement keeps the upstream history and copyright notices.
-
-Thank you to **Netresearch DTT GmbH** for:
-
-- [nr-mcp-agent](https://github.com/netresearch/t3x-nr-mcp-agent);
-- [nr-llm](https://github.com/netresearch/t3x-nr-llm);
-- [nr-vault](https://github.com/netresearch/t3x-nr-vault);
-- investing in open TYPO3 AI infrastructure.
-
-Thank you, Netresearch — in the README, in the TYPO3 backend, in the manuals,
-in package metadata, and in the preserved source history.
+The original architecture, conversation lifecycle, FAL upload endpoint, document
+extractors and much of the PHP test foundation came from Netresearch's
+GPL-licensed nr-mcp-agent. Thank you to **Netresearch DTT GmbH** for
+[nr-mcp-agent](https://github.com/netresearch/t3x-nr-mcp-agent),
+[nr-llm](https://github.com/netresearch/t3x-nr-llm) and
+[nr-vault](https://github.com/netresearch/t3x-nr-vault).
 
 Also thank you to [hauptsache.net](https://hauptsache.net/) for
-[`hn/typo3-mcp-server`](https://github.com/hauptsache-net/typo3-mcp-server).
+[`hn/typo3-mcp-server`](https://github.com/hauptsacheNet/typo3-mcp-server).
 
 ## License
 

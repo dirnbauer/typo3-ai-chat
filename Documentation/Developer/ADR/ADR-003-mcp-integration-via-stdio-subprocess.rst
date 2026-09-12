@@ -6,7 +6,7 @@
 ADR-003: MCP Integration via stdio Subprocess
 =============================================
 
-**Status:** Accepted
+**Status:** Superseded by :ref:`ADR-015 <adr-015>` — no subprocess; the catalogue is called in-process.
 
 **Date:** 2026-03-14
 

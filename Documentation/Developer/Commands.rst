@@ -1,129 +1,70 @@
 ..  include:: /Includes.rst.txt
 
+..  _developer-commands:
+
 ================
 Console commands
 ================
 
-The extension provides three Symfony console commands
-for background processing and maintenance.
-
-webconsulting-ai-chat:process
-================
-
-Process a single chat conversation. Used by the ``exec``
-processing strategy -- the ``ChatApiController`` forks
-this command for each incoming message.
-
-..  code-block:: bash
-
-    vendor/bin/typo3 webconsulting-ai-chat:process <conversationUid>
-
-**Arguments:**
-
-``conversationUid`` *(required)*
-    UID of the conversation to process. The conversation
-    must be in ``processing`` status.
-
-**Exit codes:**
-
-``0``
-    Success -- conversation processed and set to
-    ``idle``.
-
-``1``
-    Failure -- conversation not found, wrong status,
-    or processing error. The conversation is set to
-    ``failed`` with an error message.
-
-**Behavior:**
-
-*   Initializes the backend user context for the
-    conversation owner.
-*   If the conversation has pending tool calls (crash
-    recovery), executes them first via
-    ``resumeConversation()``.
-*   Otherwise, runs the full agent loop via
-    ``processConversation()``.
-
-webconsulting-ai-chat:worker
-==============
-
-Long-running worker process that polls for conversations
-in ``processing`` status and processes them sequentially.
-Used by the ``worker`` processing strategy.
-
-..  code-block:: bash
-
-    vendor/bin/typo3 webconsulting-ai-chat:worker [--poll-interval=200]
-
-**Options:**
-
-``--poll-interval`` *(optional, default: 200)*
-    Poll interval in milliseconds. How often the worker
-    checks for new conversations to process.
-
-**Behavior:**
-
-*   Runs indefinitely (designed for systemd or
-    supervisord).
-*   Uses ``dequeueForWorker()`` with a database-portable
-    compare-and-swap claim
-    to prevent multiple workers from processing the
-    same conversation.
-*   Each worker identifies itself with a unique ID
-    (PID + random bytes).
-*   After processing, the backend user context is
-    cleared to prevent leaking between conversations.
-
-**Production deployment:**
-
-See :ref:`worker-mode-production-setup` in the
-Configuration section for a systemd service example.
+One command. The processing commands of 1.x are gone: a turn now runs in the
+request that asked for it (:ref:`ADR-015 <adr-015>`), so there is nothing left
+to dispatch.
 
 webconsulting-ai-chat:cleanup
-===============
-
-Maintenance command that handles stuck conversations,
-auto-archiving, and deletion of old data. Should be
-run periodically (e.g. daily via cron).
+=============================
 
 ..  code-block:: bash
 
-    vendor/bin/typo3 webconsulting-ai-chat:cleanup \
-        [--delete-after-days=90]
+    vendor/bin/typo3 webconsulting-ai-chat:cleanup
+    vendor/bin/typo3 webconsulting-ai-chat:cleanup --dry-run
 
-**Options:**
+Four passes, in the order they depend on each other.
 
-``--delete-after-days`` *(optional, default: 90)*
-    Hard-delete archived conversations older than this
-    many days.
+**1. Release stuck conversations.** A turn runs inside a request, so a request
+that dies — a PHP timeout, a deployment, a closed connection — leaves a
+conversation claimed forever. Nothing else can release that lock, which is why
+this pass exists and why it is first. A conversation claimed for longer than 15
+minutes is settled as failed with an explanation.
 
-**Actions performed:**
+**2. Archive inactive conversations**, after :confval:`autoArchiveDays`.
 
-1.  **Timeout stuck conversations** --
-    Conversations in ``processing``, ``locked``, or
-    ``tool_loop`` status for more than 5 minutes are
-    set to ``failed`` with a timeout error message.
+**3. Delete expired conversations**, after :confval:`attachmentRetentionDays` —
+archived and soft-deleted ones, with their messages and their uploaded files.
+Files go before rows on purpose: an orphaned file is invisible, an orphaned row
+is not.
 
-2.  **Auto-archive inactive conversations** --
-    Conversations in ``idle`` status that have been
-    inactive longer than the configured
-    ``autoArchiveDays`` are archived.
+**4. Sweep orphaned messages** whose conversation no longer exists, from a hard
+delete in the List module or an interrupted earlier run.
 
-3.  **Delete old archived conversations** --
-    Archived conversations older than
-    ``--delete-after-days`` are hard-deleted from the
-    database.
+``--dry-run`` reports what each pass would do and changes nothing.
 
-**Output example:**
+Scheduling it
+=============
+
+Run it daily. Not optional in practice: pass 1 is the only thing that recovers a
+conversation whose request died, so an installation that never runs this will
+eventually have a conversation nobody can continue.
+
+Add a **Execute console command** scheduler task, or a cron entry:
 
 ..  code-block:: text
 
-    Timed out 2 stuck conversation(s)
-    Auto-archived 5 inactive conversation(s)
-    Deleted 12 old archived conversation(s)
+    15 3 * * *  /usr/bin/php /var/www/site/vendor/bin/typo3 webconsulting-ai-chat:cleanup
 
-    Cleanup summary:
-      Timed out stuck conversations: 2
-      Auto-archived inactive conversations: 5
-      Deleted old archived conversations: 12
+Removed in 2.0
+==============
+
+..  list-table::
+    :header-rows: 1
+    :widths: 42 58
+
+    *   - Command
+        - What replaced it
+    *   - ``webconsulting-ai-chat:process``
+        - Nothing. A turn runs in its own request.
+    *   - ``webconsulting-ai-chat:worker``
+        - Nothing. There is no queue to drain.
+    *   - ``webconsulting-ai-chat:migrate-nr-mcp-agent``
+        - Only available in the 1.x line. Migrate on 1.x before upgrading.
+
+Remove any scheduler task or systemd unit that still runs the first two.

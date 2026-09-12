@@ -6,7 +6,7 @@
 ADR-002: CLI-Based Message Processing
 =====================================
 
-**Status:** Accepted
+**Status:** Superseded by :ref:`ADR-015 <adr-015>` — a turn runs synchronously in the request that asked for it.
 
 **Date:** 2026-03-14
 

@@ -7,16 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Removed
-- The bundled MCP client (stdio/SSE subprocess connections), the
-  `tx_webconsultingaichat_mcp_server` registry table and its TCA, the CLI
-  processing lane (`webconsulting-ai-chat:process`,
-  `webconsulting-ai-chat:worker`) and the optional Flue workflow lane.
-- `webconsulting-ai-chat:migrate-nr-mcp-agent`. **Data migration from
-  `nr_mcp_agent` is only available in the 1.x line.** Sites still holding
-  nr-mcp-agent data must run the migration on 1.x before upgrading to 2.0.0.
-- The legacy vanilla-JS/Lit chat UI, the vendored `marked`/`DOMPurify`
-  bundles, the assistant-ui operator bundle and their Jest/Playwright suites.
+## [2.0.0] - 2026-09-13
+
+TYPO3's own MCP tools are executed **in-process** now, as the acting backend
+user, through nr-llm's agent runtime — with human approval for every write.
+
+### Breaking
+
+- **TYPO3 13 is no longer supported.** 2.0 requires TYPO3 14.3.7+ and PHP 8.4.
+- **`hn/typo3-mcp-server` is now a hard requirement** (^0.7), not a suggestion.
+  The tool catalogue is the tool surface, so it is not optional.
+- **The MCP server registry is gone.** `tx_webconsultingaichat_mcp_server`, its
+  TCA and its cache-flush hook are removed — there is nothing to configure,
+  because the installation's own catalogue is the tool set. Drop the table with
+  the database analyser.
+- **The CLI processing lane is gone.** `webconsulting-ai-chat:process` and
+  `webconsulting-ai-chat:worker` are removed; a turn runs in the request that
+  asked for it. Remove any scheduler task or systemd unit that runs them.
+- **The optional Flue workflow lane is removed**, with its extension
+  configuration (`enableFlue`, `flueFlowUid`) and its routes.
+- **The legacy frontend is removed**: the Lit chat UI, the vendored
+  `marked`/`DOMPurify` import-map entries, the assistant-ui operator bundle and
+  their Jest/Playwright suites. The 2.0 UI is a React/shadcn bundle mounting
+  `<wc-ai-chat>` in a Shadow DOM.
+- **`webconsulting-ai-chat:migrate-nr-mcp-agent` is removed. Data migration
+  from `nr_mcp_agent` is only available in the 1.x line.** A site still holding
+  nr-mcp-agent data must run that migration on 1.x *before* upgrading to 2.0.0.
+- The conversation table is slimmed (`messages`, `execution_trace`,
+  `flue_run_uid`, `current_request_id` are gone; `auto_approve_tools` and
+  `last_message_at` are new) and its status enum drops from seven values to
+  four: `idle`, `processing`, `awaiting_approval`, `failed`.
+- The API routes are renamed and every mutating route is POST. See
+  `Documentation/Developer/Api.rst`.
+
+### Added
+
+- MCP tool projection into nr-llm (`nr_llm.tool_provider`): one tool per
+  catalogue entry, named `typo3_<McpName>`, in the group `typo3_mcp`. Effect,
+  data class and admin-only status are derived from the tool's own MCP
+  annotations and the capability manifest — never from configuration.
+- Human approval for every write, bound to the reviewed turn by nr-llm's turn
+  digest, with an explicit deny path that reaches the transcript.
+- Server-sent event streaming for a turn, negotiated on the same route that
+  starts it (`Accept: text/event-stream`), with the identical event list
+  returned as JSON otherwise.
+- `tx_webconsultingaichat_message`: one row per message, with
+  `UNIQUE (conversation, sequence)`.
+- Upgrade wizard `webconsultingAiChat_messagesToRows`, converting 1.x transcript
+  blobs into message rows. Idempotent; empties but does not drop the legacy
+  column.
+- Per-user turn rate limiting (`turnsPerMinute`), attachment retention
+  (`attachmentRetentionDays`), a configurable `uploadFolder` and per-user tool
+  narrowing through user TSconfig (`tx_webconsultingaichat.tools.allow|deny`).
+- `conversations/events` reads a run's execution trace back from nr-llm, so the
+  trace is not duplicated into this extension's own tables.
+- ADR-015 (native in-process MCP tool execution), ADR-016 (shadcn chat UI in a
+  Shadow DOM) and ADR-017 (server-sent events for turn streaming). ADR-001,
+  -002, -003, -007, -008, -012 and -014 are marked superseded; ADR-006's phpat
+  enforcement no longer applies.
+
+### Changed
+
+- Require `netresearch/nr-llm` ^0.34.
+- `webconsulting-ai-chat:cleanup` gains a pass that releases conversations left
+  claimed by a request that died — nothing else can, so it should be scheduled
+  daily — and now deletes messages and uploaded files with the conversation.
+- The dev toolchain is reduced to what CI runs: phpstan (level 10, one root
+  `phpstan.neon`), php-cs-fixer with `typo3/coding-standards`, phpunit and the
+  testing framework. captainhook, infection, rector and phpat are removed with
+  their configs, the Makefile and the Docker test runner.
+- CI is a single self-contained workflow: lint, coding standards, PHPStan, unit
+  tests on PHP 8.4 and 8.5 (allowed to fail), functional tests against MariaDB
+  10.11.
 
 ## [0.7.0] - 2026-07-24
 

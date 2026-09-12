@@ -6,7 +6,7 @@
 ADR-007: Polling over WebSockets or SSE
 =======================================
 
-**Status:** Accepted
+**Status:** Superseded by :ref:`ADR-017 <adr-017>` — a turn is streamed as server-sent events.
 
 **Date:** 2026-03-15
 

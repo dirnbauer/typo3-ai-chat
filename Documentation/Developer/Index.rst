@@ -9,6 +9,7 @@ Developer information
     :titlesonly:
 
     Architecture
+    Api
     AgentLoop
     Commands
     Testing

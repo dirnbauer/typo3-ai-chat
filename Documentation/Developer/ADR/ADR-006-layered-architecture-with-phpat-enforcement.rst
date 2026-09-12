@@ -6,7 +6,7 @@
 ADR-006: Layered Architecture with PHPAt Enforcement
 ====================================================
 
-**Status:** Accepted
+**Status:** Superseded by the 2.0 toolchain — the layering stands, the phpat enforcement does not. 2.0 removed phpat with the rest of the tooling CI does not run (see the 2.0.0 changelog); the boundaries are now held by review and by PHPStan level 10.
 
 **Date:** 2026-03-14
 

@@ -6,7 +6,7 @@
 ADR-012: Markdown Rendering with marked.js and DOMPurify
 ========================================================
 
-**Status:** Accepted
+**Status:** Superseded by :ref:`ADR-016 <adr-016>` — rendering moves into the bundle, with no import-map globals.
 
 **Date:** 2026-03-17
 

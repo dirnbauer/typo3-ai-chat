@@ -6,7 +6,7 @@
 ADR-001: Embedded MCP Client in TYPO3 Backend
 =============================================
 
-**Status:** Accepted
+**Status:** Superseded by :ref:`ADR-015 <adr-015>` — the client is gone; the tools are executed in-process instead.
 
 **Date:** 2026-03-14
 
