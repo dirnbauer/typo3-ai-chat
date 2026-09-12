@@ -6,11 +6,13 @@ namespace Webconsulting\Typo3AiChat\Tool;
 
 use Hn\McpServer\MCP\ToolRegistry;
 use Hn\McpServer\Service\McpToolCatalogService;
+use Netresearch\NrLlm\Domain\Enum\ToolDataClass;
 use Netresearch\NrLlm\Domain\Enum\ToolEffect;
 use Netresearch\NrLlm\Domain\ValueObject\ToolSpec;
 use Netresearch\NrLlm\Service\Tool\ToolProviderInterface;
 use Throwable;
 use TYPO3\CMS\Core\Cache\Frontend\FrontendInterface;
+use Webconsulting\Typo3AiChat\Service\BackendUserContext;
 
 /**
  * Projects this installation's MCP tool catalogue into the nr-llm agent
@@ -26,10 +28,15 @@ use TYPO3\CMS\Core\Cache\Frontend\FrontendInterface;
  * The expensive half is the metadata, not the objects: ``describe()`` asks
  * every tool to build its JSON schema, the manifest is parsed, and each tool
  * class is reflected for ``#[AdminOnly]``. All of that is cached, keyed by a
- * fingerprint of the registered tool NAMES — cheap to compute, and it changes
- * the moment an extension adds, removes or gates a tool. A schema edit inside
- * an existing tool is picked up by the ordinary system-cache flush that a
- * deployment performs anyway.
+ * fingerprint of the registered tool NAMES plus the acting backend user —
+ * cheap to compute, changing the moment an extension adds, removes or gates a
+ * tool, and never shared between users (see {@see definitions()}). A schema
+ * edit inside an existing tool is picked up by the ordinary system-cache flush
+ * that a deployment performs anyway.
+ *
+ * Several MCP tools refuse to describe themselves without a backend user at
+ * all, so the projection is empty outside an authenticated request — correct,
+ * and the reason a turn runs synchronously in one.
  *
  * No network I/O, as the interface requires: every source is in-process.
  */
@@ -43,6 +50,7 @@ final readonly class McpCatalogToolProvider implements ToolProviderInterface
         private ToolEffectClassifier $effectClassifier,
         private ToolResultConverter $resultConverter,
         private FrontendInterface $cache,
+        private BackendUserContext $backendUser,
     ) {}
 
     /**
@@ -59,6 +67,7 @@ final readonly class McpCatalogToolProvider implements ToolProviderInterface
                     parameters: $definition['parameters'],
                 ),
                 ToolEffect::from($definition['effect']),
+                ToolDataClass::from($definition['dataClass']),
                 $definition['requiresAdmin'],
                 $definition['enabledByDefault'],
                 $this->catalog,
@@ -73,6 +82,7 @@ final readonly class McpCatalogToolProvider implements ToolProviderInterface
      *     description: string,
      *     parameters: array<string, mixed>,
      *     effect: string,
+     *     dataClass: string,
      *     requiresAdmin: bool,
      *     enabledByDefault: bool,
      * }>
@@ -88,10 +98,16 @@ final readonly class McpCatalogToolProvider implements ToolProviderInterface
             return [];
         }
 
-        $cacheIdentifier = self::CACHE_PREFIX . sha1(implode(',', $names));
+        // The acting user is part of the key, not decoration: several MCP tools
+        // build their JSON schema from what the CURRENT backend user may reach
+        // — WriteTable enumerates the tables they can edit — so a schema cached
+        // under the tool names alone would serve one editor's table list to
+        // another. A per-user key costs one cache entry per active user and
+        // makes that impossible.
+        $cacheIdentifier = self::CACHE_PREFIX . sha1(implode(',', $names) . '|' . $this->backendUser->uid());
         $cached = $this->cache->get($cacheIdentifier);
         if (is_array($cached)) {
-            /** @var list<array{mcpName: string, description: string, parameters: array<string, mixed>, effect: string, requiresAdmin: bool, enabledByDefault: bool}> $cached */
+            /** @var list<array{mcpName: string, description: string, parameters: array<string, mixed>, effect: string, dataClass: string, requiresAdmin: bool, enabledByDefault: bool}> $cached */
             return $cached;
         }
 
@@ -114,6 +130,7 @@ final readonly class McpCatalogToolProvider implements ToolProviderInterface
      *     description: string,
      *     parameters: array<string, mixed>,
      *     effect: string,
+     *     dataClass: string,
      *     requiresAdmin: bool,
      *     enabledByDefault: bool,
      * }|null
@@ -136,6 +153,7 @@ final readonly class McpCatalogToolProvider implements ToolProviderInterface
             'description' => $this->description($schema, $mcpName),
             'parameters' => $this->parameters($schema),
             'effect' => $effect->value,
+            'dataClass' => $this->effectClassifier->dataClass($mcpName)->value,
             'requiresAdmin' => $this->effectClassifier->requiresAdmin(
                 $mcpName,
                 $schema,

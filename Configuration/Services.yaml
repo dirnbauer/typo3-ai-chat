@@ -10,6 +10,13 @@ services:
       - '../Classes/Domain/Model/*'
       - '../Classes/Enum/*'
       - '../Classes/Exception/*'
+      # Registered by Configuration/Services.php instead, and only where a
+      # scripted LLM is safe to have. See the comment there.
+      - '../Classes/Testing/*'
+      # One instance per catalogue entry, built by McpCatalogToolProvider with
+      # the entry's own name, spec and effect — there is no single autowirable
+      # instance of it to register.
+      - '../Classes/Tool/McpCatalogTool.php'
 
   Webconsulting\Typo3AiChat\Controller\ChatModuleController:
     public: true

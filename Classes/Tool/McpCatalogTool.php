@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Webconsulting\Typo3AiChat\Tool;
 
 use Hn\McpServer\Service\McpToolCatalogService;
+use Netresearch\NrLlm\Domain\Enum\ToolDataClass;
 use Netresearch\NrLlm\Domain\Enum\ToolEffect;
 use Netresearch\NrLlm\Domain\ValueObject\ToolResult;
 use Netresearch\NrLlm\Domain\ValueObject\ToolSpec;
+use Netresearch\NrLlm\Service\Tool\ToolDataClassInterface;
 use Netresearch\NrLlm\Service\Tool\ToolEffectInterface;
 use Netresearch\NrLlm\Service\Tool\ToolExecutionContext;
 use Netresearch\NrLlm\Service\Tool\ToolInterface;
@@ -41,7 +43,7 @@ use Webconsulting\Typo3AiChat\Utility\ErrorMessageSanitizer;
  * The check fails closed on every branch: no actor, no ambient user, a
  * mismatch, or an unresolvable uid all produce an error {@see ToolResult}.
  */
-final readonly class McpCatalogTool implements ToolInterface, ToolEffectInterface
+final readonly class McpCatalogTool implements ToolInterface, ToolEffectInterface, ToolDataClassInterface
 {
     /**
      * The prefix that turns an MCP tool name into a model-facing tool name:
@@ -62,6 +64,7 @@ final readonly class McpCatalogTool implements ToolInterface, ToolEffectInterfac
         private string $mcpName,
         private ToolSpec $spec,
         private ToolEffect $effect,
+        private ToolDataClass $dataClass,
         private bool $requiresAdmin,
         private bool $enabledByDefault,
         private McpToolCatalogService $catalog,
@@ -99,6 +102,21 @@ final readonly class McpCatalogTool implements ToolInterface, ToolEffectInterfac
     public function getEffect(): ToolEffect
     {
         return $this->effect;
+    }
+
+    /**
+     * How sensitive this tool's output is (nr-llm ADR-094).
+     *
+     * Declared rather than inherited from the group: every MCP tool shares one
+     * group, and nr-llm's default for an unknown group is SECRET_ADJACENT —
+     * which would withhold the entire catalogue from every provider that is
+     * not maximally trusted. The capability manifest already states each
+     * tool's reach, so the class is derived from that instead of from the one
+     * label they all share.
+     */
+    public function getDataClass(): ToolDataClass
+    {
+        return $this->dataClass;
     }
 
     public function getGroup(): string

@@ -12,6 +12,7 @@ use Hn\McpServer\Service\ToolResultNormalizer;
 use Mcp\Types\CallToolResult;
 use Mcp\Types\TextContent;
 use Netresearch\NrLlm\Domain\Enum\ArtifactType;
+use Netresearch\NrLlm\Domain\Enum\ToolDataClass;
 use Netresearch\NrLlm\Domain\Enum\ToolEffect;
 use Netresearch\NrLlm\Domain\ValueObject\AiActorContext;
 use Netresearch\NrLlm\Domain\ValueObject\ToolSpec;
@@ -235,6 +236,11 @@ final class McpCatalogToolTest extends TestCase
         self::assertSame(ToolEffect::NON_IDEMPOTENT_WRITE, $tool->getEffect());
         self::assertSame(McpCatalogTool::GROUP, $tool->getGroup());
         self::assertSame('typo3_WriteTable', $tool->getSpec()->name);
+        self::assertSame(
+            ToolDataClass::EDITOR_CONTENT,
+            $tool->getDataClass(),
+            'A declared class is what keeps the catalogue off nr-llm\'s fail-closed default for an unknown group.',
+        );
     }
 
     private function tool(
@@ -246,6 +252,7 @@ final class McpCatalogToolTest extends TestCase
             'WriteTable',
             new ToolSpec('typo3_WriteTable', 'Write a record.', ['type' => 'object', 'properties' => []]),
             $effect,
+            ToolDataClass::EDITOR_CONTENT,
             $requiresAdmin,
             $effect === ToolEffect::READ_ONLY,
             $this->catalogReturning($result),

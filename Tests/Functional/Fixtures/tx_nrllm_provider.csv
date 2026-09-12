@@ -1,0 +1,3 @@
+"tx_nrllm_provider"
+,"uid","pid","identifier","name","description","adapter_type","trust_zone","endpoint_url","api_key","api_timeout","max_retries","is_active","priority","sorting","deleted","hidden","tstamp","crdate"
+,1,0,"scripted","Scripted","Replays queued responses for the functional suite.","scripted","internal","https://scripted.invalid","",5,0,1,50,0,0,0,1710000000,1710000000

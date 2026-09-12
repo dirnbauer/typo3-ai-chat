@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Webconsulting\Typo3AiChat\Domain\Model;
 
-use JsonException;
 use Webconsulting\Typo3AiChat\Enum\MessageRole;
 
 /**
@@ -67,7 +66,13 @@ final readonly class Message
      * assigned by the repository inside the same statement that inserts, so a
      * caller cannot accidentally choose one.
      *
-     * @return array<string, int|string|null>
+     * The two JSON columns carry ARRAYS, not encoded strings. Doctrine knows
+     * those columns are `json` and encodes them on the way in — handing it a
+     * string it has already been asked to encode produces a JSON document
+     * whose content is a JSON document, which decodes on the way out to a
+     * string where the reader expects a list.
+     *
+     * @return array<string, int|string|array<int, array<string, mixed>>|null>
      */
     public function toRow(): array
     {
@@ -76,9 +81,9 @@ final readonly class Message
             'conversation' => $this->conversation,
             'role' => $this->role->value,
             'content' => $this->content,
-            'tool_calls' => $this->toolCalls === [] ? null : self::encode($this->toolCalls),
+            'tool_calls' => $this->toolCalls === [] ? null : $this->toolCalls,
             'tool_call_id' => $this->toolCallId,
-            'attachments' => $this->attachments === [] ? null : self::encode($this->attachments),
+            'attachments' => $this->attachments === [] ? null : $this->attachments,
             'run_uuid' => $this->runUuid,
             'prompt_tokens' => $this->promptTokens,
             'completion_tokens' => $this->completionTokens,
@@ -123,18 +128,12 @@ final readonly class Message
     }
 
     /**
-     * @param list<array<string, mixed>> $value
-     */
-    private static function encode(array $value): string
-    {
-        try {
-            return json_encode($value, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-        } catch (JsonException) {
-            return '[]';
-        }
-    }
-
-    /**
+     * A `json` column comes back decoded on some platforms and as text on
+     * others, and a legacy row written before the column was JSON is text
+     * either way. Accepting both is not defensiveness for its own sake — it is
+     * the difference between a migrated transcript replaying and silently
+     * losing its tool calls.
+     *
      * @param array<string, mixed> $row
      *
      * @return list<array<string, mixed>>
@@ -142,15 +141,14 @@ final readonly class Message
     private static function jsonList(array $row, string $key): array
     {
         $raw = $row[$key] ?? null;
-        if (!is_string($raw) || $raw === '') {
+        if (is_string($raw)) {
+            $raw = $raw === '' ? null : json_decode($raw, true);
+        }
+        if (!is_array($raw)) {
             return [];
         }
 
-        $decoded = json_decode($raw, true);
-        if (!is_array($decoded)) {
-            return [];
-        }
-
+        $decoded = $raw;
         $list = [];
         foreach ($decoded as $item) {
             if (!is_array($item)) {
