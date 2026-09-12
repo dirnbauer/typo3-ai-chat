@@ -137,3 +137,35 @@ jobs:
 
       - name: Functional tests
         run: composer ci:tests:functional
+
+  assets:
+    name: Frontend bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Types and lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      # The bundle is committed because the backend loads it by URL: there is
+      # no build step between a `composer require` and a browser asking for
+      # `Dist/app.js`. A committed artifact is only trustworthy if it is the one
+      # the committed sources produce, so the build runs here and the result has
+      # to match byte for byte. A diff means somebody edited the bundle, or
+      # edited the sources and forgot to rebuild.
+      - name: Build the bundle
+        run: npm run build
+
+      - name: The committed bundle matches its sources
+        run: git diff --exit-code Resources/Public/JavaScript/Dist
