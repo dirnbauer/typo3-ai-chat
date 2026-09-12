@@ -4,257 +4,132 @@ declare(strict_types=1);
 
 namespace Webconsulting\Typo3AiChat\Tests\Unit\Configuration;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
-use stdClass;
 use TYPO3\CMS\Core\Configuration\ExtensionConfiguration as Typo3ExtensionConfiguration;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use Webconsulting\Typo3AiChat\Configuration\ExtensionConfiguration;
 
-class ExtensionConfigurationTest extends TestCase
+/**
+ * Every value TYPO3 stores here is a string, and every consumer wants something
+ * else. The interesting cases are therefore the ones where a wrong cast would
+ * be silently PERMISSIVE: a blank group list that must mean "everybody", and a
+ * limit whose absence must mean the documented default rather than zero.
+ */
+final class ExtensionConfigurationTest extends TestCase
 {
-    protected function setUp(): void
+    protected function tearDown(): void
     {
-        parent::setUp();
-        // Provide a mock for GeneralUtility::makeInstance
-        $mock = $this->createMock(Typo3ExtensionConfiguration::class);
-        $mock->method('get')->with('webconsulting_ai_chat')->willReturn([
+        GeneralUtility::purgeInstances();
+        parent::tearDown();
+    }
+
+    #[Test]
+    public function valuesAreReadAsTheTypesTheirConsumersNeed(): void
+    {
+        $config = $this->configWith([
             'llmTaskUid' => '42',
-            'processingStrategy' => 'worker',
-            'allowedGroups' => '1,3,5',
-            'enableMcp' => '1',
+            'maxIterations' => '12',
+            'turnsPerMinute' => '5',
             'maxMessageLength' => '5000',
+            'maxConversationsPerUser' => '20',
             'maxActiveConversationsPerUser' => '2',
-            'mcpServerCommand' => '/usr/bin/typo3',
-            'mcpServerArgs' => 'mcp:server',
+            'autoArchiveDays' => '14',
+            'attachmentRetentionDays' => '30',
         ]);
-        GeneralUtility::addInstance(Typo3ExtensionConfiguration::class, $mock);
-    }
 
-    #[Test]
-    public function getLlmTaskUidReturnsCastedInt(): void
-    {
-        $config = new ExtensionConfiguration();
         self::assertSame(42, $config->getLlmTaskUid());
-    }
-
-    #[Test]
-    public function getAllowedGroupIdsParsesCommaList(): void
-    {
-        $config = new ExtensionConfiguration();
-        self::assertSame([1, 3, 5], $config->getAllowedGroupIds());
-    }
-
-    #[Test]
-    public function hasLegacyMcpFieldsReturnsTrueWhenCommandSet(): void
-    {
-        $config = new ExtensionConfiguration();
-        self::assertTrue($config->hasLegacyMcpFields());
-    }
-
-    #[Test]
-    public function hasLegacyMcpFieldsReturnsFalseWhenFieldsEmpty(): void
-    {
-        // Consume the setUp mock first (FIFO queue)
-        GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
-
-        $mock = $this->createMock(Typo3ExtensionConfiguration::class);
-        $mock->method('get')->with('webconsulting_ai_chat')->willReturn([
-            'enableMcp' => '1',
-        ]);
-        GeneralUtility::addInstance(Typo3ExtensionConfiguration::class, $mock);
-
-        $config = new ExtensionConfiguration();
-        self::assertFalse($config->hasLegacyMcpFields());
-    }
-
-    #[Test]
-    public function isMcpEnabledReturnsFalseForZeroString(): void
-    {
-        // Consume the setUp mock first (FIFO queue)
-        GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
-
-        $mock = $this->createMock(Typo3ExtensionConfiguration::class);
-        $mock->method('get')->with('webconsulting_ai_chat')->willReturn([
-            'enableMcp' => '0',
-        ]);
-        GeneralUtility::addInstance(Typo3ExtensionConfiguration::class, $mock);
-
-        $config = new ExtensionConfiguration();
-        self::assertFalse($config->isMcpEnabled());
-    }
-
-    #[Test]
-    public function getMaxConversationsPerUserReturnsConfiguredValue(): void
-    {
-        // Consume the setUp mock first
-        GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
-
-        $mock = $this->createMock(Typo3ExtensionConfiguration::class);
-        $mock->method('get')->with('webconsulting_ai_chat')->willReturn([
-            'maxConversationsPerUser' => '100',
-        ]);
-        GeneralUtility::addInstance(Typo3ExtensionConfiguration::class, $mock);
-
-        $config = new ExtensionConfiguration();
-        self::assertSame(100, $config->getMaxConversationsPerUser());
-    }
-
-    #[Test]
-    public function getAutoArchiveDaysReturnsConfiguredValue(): void
-    {
-        // Consume the setUp mock first
-        GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
-
-        $mock = $this->createMock(Typo3ExtensionConfiguration::class);
-        $mock->method('get')->with('webconsulting_ai_chat')->willReturn([
-            'autoArchiveDays' => '60',
-        ]);
-        GeneralUtility::addInstance(Typo3ExtensionConfiguration::class, $mock);
-
-        $config = new ExtensionConfiguration();
-        self::assertSame(60, $config->getAutoArchiveDays());
-    }
-
-    #[Test]
-    public function getAutoArchiveDaysDefaultsTo30(): void
-    {
-        // Consume the setUp mock first
-        GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
-
-        $mock = $this->createMock(Typo3ExtensionConfiguration::class);
-        $mock->method('get')->with('webconsulting_ai_chat')->willReturn([]);
-        GeneralUtility::addInstance(Typo3ExtensionConfiguration::class, $mock);
-
-        $config = new ExtensionConfiguration();
-        self::assertSame(30, $config->getAutoArchiveDays());
-    }
-
-    #[Test]
-    public function getMaxConversationsPerUserDefaultsTo50(): void
-    {
-        // Consume the setUp mock first
-        GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
-
-        $mock = $this->createMock(Typo3ExtensionConfiguration::class);
-        $mock->method('get')->with('webconsulting_ai_chat')->willReturn([]);
-        GeneralUtility::addInstance(Typo3ExtensionConfiguration::class, $mock);
-
-        $config = new ExtensionConfiguration();
-        self::assertSame(50, $config->getMaxConversationsPerUser());
-    }
-
-    #[Test]
-    public function hasLegacyMcpFieldsReturnsTrueWhenArgsSet(): void
-    {
-        // Consume the setUp mock first
-        GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
-
-        $mock = $this->createMock(Typo3ExtensionConfiguration::class);
-        $mock->method('get')->with('webconsulting_ai_chat')->willReturn([
-            'mcpServerArgs' => 'mcp:server',
-        ]);
-        GeneralUtility::addInstance(Typo3ExtensionConfiguration::class, $mock);
-
-        $config = new ExtensionConfiguration();
-        self::assertTrue($config->hasLegacyMcpFields());
-    }
-
-    #[Test]
-    public function getProcessingStrategyReturnsWorkerWhenConfigured(): void
-    {
-        $config = new ExtensionConfiguration();
-        self::assertSame('worker', $config->getProcessingStrategy());
-    }
-
-    #[Test]
-    public function defaultsAreUsedForMissingKeys(): void
-    {
-        // Consume the setUp mock first (FIFO queue)
-        GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
-
-        $mock = $this->createMock(Typo3ExtensionConfiguration::class);
-        $mock->method('get')->with('webconsulting_ai_chat')->willReturn([]);
-        GeneralUtility::addInstance(Typo3ExtensionConfiguration::class, $mock);
-
-        $config = new ExtensionConfiguration();
-        self::assertSame(0, $config->getLlmTaskUid());
-        self::assertSame('exec', $config->getProcessingStrategy());
-        self::assertSame([], $config->getAllowedGroupIds());
-        self::assertFalse($config->isMcpEnabled());
-        self::assertSame(10000, $config->getMaxMessageLength());
-        self::assertSame(3, $config->getMaxActiveConversationsPerUser());
-    }
-
-    #[Test]
-    public function getMaxMessageLengthReturnsConfiguredValue(): void
-    {
-        $config = new ExtensionConfiguration();
+        self::assertSame(12, $config->getMaxIterations());
+        self::assertSame(5, $config->getTurnsPerMinute());
         self::assertSame(5000, $config->getMaxMessageLength());
-    }
-
-    #[Test]
-    public function getMaxActiveConversationsPerUserReturnsConfiguredValue(): void
-    {
-        $config = new ExtensionConfiguration();
+        self::assertSame(20, $config->getMaxConversationsPerUser());
         self::assertSame(2, $config->getMaxActiveConversationsPerUser());
+        self::assertSame(14, $config->getAutoArchiveDays());
+        self::assertSame(30, $config->getAttachmentRetentionDays());
     }
 
     #[Test]
-    public function isMcpEnabledReturnsTrueForOneString(): void
+    public function missingKeysFallBackToTheDocumentedDefaults(): void
     {
-        $config = new ExtensionConfiguration();
-        self::assertTrue($config->isMcpEnabled());
-    }
+        $config = $this->configWith([]);
 
-    #[Test]
-    public function getAllowedGroupIdsReturnsSingleValue(): void
-    {
-        // Consume the setUp mock first
-        GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
-
-        $mock = $this->createMock(Typo3ExtensionConfiguration::class);
-        $mock->method('get')->with('webconsulting_ai_chat')->willReturn([
-            'allowedGroups' => '42',
-        ]);
-        GeneralUtility::addInstance(Typo3ExtensionConfiguration::class, $mock);
-
-        $config = new ExtensionConfiguration();
-        self::assertSame([42], $config->getAllowedGroupIds());
-    }
-
-    #[Test]
-    public function hasLegacyMcpFieldsReturnsFalseWhenEmptyStringValues(): void
-    {
-        // Consume the setUp mock first
-        GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
-
-        $mock = $this->createMock(Typo3ExtensionConfiguration::class);
-        $mock->method('get')->with('webconsulting_ai_chat')->willReturn([
-            'mcpServerCommand' => '',
-            'mcpServerArgs' => '',
-        ]);
-        GeneralUtility::addInstance(Typo3ExtensionConfiguration::class, $mock);
-
-        $config = new ExtensionConfiguration();
-        self::assertFalse($config->hasLegacyMcpFields());
-    }
-
-    #[Test]
-    public function nonScalarConfigValueFallsBackToDefault(): void
-    {
-        // Consume the setUp mock first
-        GeneralUtility::makeInstance(Typo3ExtensionConfiguration::class);
-
-        $mock = $this->createMock(Typo3ExtensionConfiguration::class);
-        $mock->method('get')->with('webconsulting_ai_chat')->willReturn([
-            'llmTaskUid' => ['nested' => 'array'],
-            'maxMessageLength' => new stdClass(),
-        ]);
-        GeneralUtility::addInstance(Typo3ExtensionConfiguration::class, $mock);
-
-        $config = new ExtensionConfiguration();
-        self::assertSame(0, $config->getLlmTaskUid());
+        self::assertSame(0, $config->getLlmTaskUid(), 'Unconfigured means unavailable, not "task 1".');
+        self::assertSame(8, $config->getMaxIterations());
+        self::assertSame(10, $config->getTurnsPerMinute());
         self::assertSame(10000, $config->getMaxMessageLength());
+        self::assertSame(50, $config->getMaxConversationsPerUser());
+        self::assertSame(3, $config->getMaxActiveConversationsPerUser());
+        self::assertSame(30, $config->getAutoArchiveDays());
+        self::assertSame(90, $config->getAttachmentRetentionDays());
+        self::assertSame('1:/ai_chat/', $config->getUploadFolder());
+    }
+
+    /**
+     * @param list<int> $expected
+     */
+    #[Test]
+    #[DataProvider('groupLists')]
+    public function theAllowedGroupListIsParsedIntoUids(string $raw, array $expected): void
+    {
+        self::assertSame($expected, $this->configWith(['allowedGroups' => $raw])->getAllowedGroupIds());
+    }
+
+    /**
+     * @return iterable<string, array{0: string, 1: list<int>}>
+     */
+    public static function groupLists(): iterable
+    {
+        yield 'empty means everybody' => ['', []];
+        yield 'whitespace also means everybody' => ['   ', []];
+        yield 'a plain list' => ['1,3,5', [1, 3, 5]];
+        yield 'spaces are tolerated' => ['1, 3 ,5', [1, 3, 5]];
+        yield 'duplicates collapse' => ['3,3,7', [3, 7]];
+        yield 'zero and nonsense are dropped' => ['0,abc,4', [4]];
+    }
+
+    #[Test]
+    public function theUploadFolderAlwaysEndsInASlashSoCallersCanAppend(): void
+    {
+        self::assertSame('1:/chat/', $this->configWith(['uploadFolder' => '1:/chat'])->getUploadFolder());
+        self::assertSame('2:/x/y/', $this->configWith(['uploadFolder' => ' 2:/x/y/ '])->getUploadFolder());
+        self::assertSame(
+            '1:/ai_chat/',
+            $this->configWith(['uploadFolder' => ''])->getUploadFolder(),
+            'A blank folder falls back rather than writing to the storage root.',
+        );
+    }
+
+    #[Test]
+    public function aTurnMustBeAllowedAtLeastOneRound(): void
+    {
+        self::assertSame(1, $this->configWith(['maxIterations' => '0'])->getMaxIterations());
+        self::assertSame(1, $this->configWith(['maxIterations' => '-5'])->getMaxIterations());
+    }
+
+    #[Test]
+    public function limitsCannotBeNegative(): void
+    {
+        $config = $this->configWith([
+            'turnsPerMinute' => '-1',
+            'maxMessageLength' => '-1',
+            'autoArchiveDays' => '-1',
+        ]);
+
+        self::assertSame(0, $config->getTurnsPerMinute(), '0 is the documented "no limit".');
+        self::assertSame(0, $config->getMaxMessageLength());
+        self::assertSame(0, $config->getAutoArchiveDays());
+    }
+
+    /**
+     * @param array<string, mixed> $values
+     */
+    private function configWith(array $values): ExtensionConfiguration
+    {
+        $typo3Config = $this->createStub(Typo3ExtensionConfiguration::class);
+        $typo3Config->method('get')->willReturn($values);
+        GeneralUtility::addInstance(Typo3ExtensionConfiguration::class, $typo3Config);
+
+        return new ExtensionConfiguration();
     }
 }

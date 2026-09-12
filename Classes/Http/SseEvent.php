@@ -30,13 +30,29 @@ final readonly class SseEvent
 
     public function encode(): string
     {
-        $frame = '';
-        if ($this->id !== null) {
-            $frame .= 'id: ' . $this->id . "\n";
-        }
-        $frame .= 'event: ' . $this->name . "\n";
+        return self::frame($this->name, $this->data(), $this->id);
+    }
 
-        foreach (explode("\n", $this->data()) as $line) {
+    /**
+     * The encoding rule itself, separated from what this event happens to
+     * carry.
+     *
+     * It is its own function because the rule it implements — one `data:` per
+     * line, one blank line to end the frame — is defensive: JSON escapes
+     * newlines, so in practice `$data` arrives as a single line and the
+     * splitting never fires. A rule that never fires in production is a rule
+     * nobody would notice breaking, which is exactly the kind that has to be
+     * testable on its own.
+     */
+    public static function frame(string $name, string $data, ?int $id = null): string
+    {
+        $frame = '';
+        if ($id !== null) {
+            $frame .= 'id: ' . $id . "\n";
+        }
+        $frame .= 'event: ' . $name . "\n";
+
+        foreach (explode("\n", $data) as $line) {
             $frame .= 'data: ' . rtrim($line, "\r") . "\n";
         }
 

@@ -69,15 +69,28 @@ final class ServerSentEventStream implements SelfEmittableStreamInterface
             ob_end_flush();
         }
 
-        $sink = new TurnEventSink(
+        $this->produce(new TurnEventSink(
             writer: static function (SseEvent $event): void {
                 echo $event->encode();
                 flush();
             },
             abortCheck: static fn(): bool => connection_aborted() === 1,
             onAbort: $this->onAbort,
-        );
+        ));
+    }
 
+    /**
+     * The stream's own contribution to the event list, separated from the
+     * socket it normally writes to.
+     *
+     * Its own method because {@see emit()} tears down every output buffer in
+     * the process — correct in production, and impossible for a test to observe
+     * through, since the buffer the test opened to capture the output is one of
+     * the ones being torn down. The ordering rule lives here so it can be
+     * checked against a sink that simply collects.
+     */
+    public function produce(TurnEventSink $sink): void
+    {
         // An immediate ping opens the stream: until the first byte arrives the
         // browser's EventSource has not fired `open`, and a turn that thinks for
         // ten seconds before its first token would look like a failed request.
