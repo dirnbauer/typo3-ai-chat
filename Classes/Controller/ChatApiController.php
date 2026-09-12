@@ -4,685 +4,677 @@ declare(strict_types=1);
 
 namespace Webconsulting\Typo3AiChat\Controller;
 
-use DateTimeImmutable;
-use DateTimeInterface;
-use Exception;
+use Closure;
 use finfo;
+use Netresearch\NrLlm\Domain\ValueObject\AgentRunEvent;
+use Netresearch\NrLlm\Service\Agent\AgentRuntimeInterface;
+use Netresearch\NrLlm\Service\BudgetServiceInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Message\UploadedFileInterface;
 use RuntimeException;
 use Throwable;
 use TYPO3\CMS\Core\Http\JsonResponse;
-use TYPO3\CMS\Core\Resource\Folder;
+use TYPO3\CMS\Core\Http\Response;
+use TYPO3\CMS\Core\Resource\Exception\FileDoesNotExistException;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
-use TYPO3\CMS\Core\Resource\ResourceStorage;
-use TYPO3\CMS\Core\Resource\StorageRepository;
-use TYPO3\CMS\Core\Utility\GeneralUtility;
 use Webconsulting\Typo3AiChat\Configuration\ExtensionConfiguration;
 use Webconsulting\Typo3AiChat\Document\DocumentExtractorRegistry;
 use Webconsulting\Typo3AiChat\Domain\Model\Conversation;
+use Webconsulting\Typo3AiChat\Domain\Model\Message;
 use Webconsulting\Typo3AiChat\Domain\Repository\ConversationRepository;
+use Webconsulting\Typo3AiChat\Domain\Repository\MessageRepository;
 use Webconsulting\Typo3AiChat\Enum\ConversationStatus;
-use Webconsulting\Typo3AiChat\Enum\MessageRole;
-use Webconsulting\Typo3AiChat\Service\ChatCapabilitiesInterface;
-use Webconsulting\Typo3AiChat\Service\ChatProcessorInterface;
-use Webconsulting\Typo3AiChat\Service\FlueWorkflowBridge;
+use Webconsulting\Typo3AiChat\Exception\ChatException;
+use Webconsulting\Typo3AiChat\Http\ServerSentEventStream;
+use Webconsulting\Typo3AiChat\Http\TurnEventSink;
+use Webconsulting\Typo3AiChat\Service\ApprovalService;
+use Webconsulting\Typo3AiChat\Service\AttachmentStorage;
+use Webconsulting\Typo3AiChat\Service\BackendUserContext;
+use Webconsulting\Typo3AiChat\Service\ChatTurnService;
+use Webconsulting\Typo3AiChat\Service\ToolAccessService;
+use Webconsulting\Typo3AiChat\Service\ToolEffectLookup;
+use Webconsulting\Typo3AiChat\Service\TurnRateLimiter;
+use Webconsulting\Typo3AiChat\Tool\McpCatalogTool;
+use Webconsulting\Typo3AiChat\Utility\ErrorMessageSanitizer;
 
+/**
+ * The chat API.
+ *
+ * Deliberately thin: it authorises, parses, hands off, and shapes a response.
+ * Every decision that matters — which tools, which identity, what an outcome
+ * means, what gets persisted — belongs to a service, because those decisions
+ * must come out the same whichever transport asked.
+ */
 final readonly class ChatApiController
 {
-    private const ERROR_FILE_NOT_FOUND = 'File not found';
-    private const ERROR_CONVERSATION_PROCESSING = 'Conversation is already processing';
+    private const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 
     public function __construct(
-        private ConversationRepository $repository,
-        private ChatProcessorInterface $processor,
+        private ConversationRepository $conversations,
+        private MessageRepository $messages,
+        private ChatTurnService $turnService,
+        private ApprovalService $approvalService,
+        private ToolAccessService $toolAccess,
+        private ToolEffectLookup $effectLookup,
+        private TurnRateLimiter $rateLimiter,
+        private BackendUserContext $backendUser,
         private ExtensionConfiguration $config,
-        private ChatCapabilitiesInterface $chatService,
+        private AttachmentStorage $attachmentStorage,
+        private DocumentExtractorRegistry $documentExtractors,
         private ResourceFactory $resourceFactory,
-        private StorageRepository $storageRepository,
-        private DocumentExtractorRegistry $documentExtractorRegistry,
-        private ?FlueWorkflowBridge $flueWorkflowBridge = null,
+        private AgentRuntimeInterface $agentRuntime,
+        private BudgetServiceInterface $budgetService,
     ) {}
 
+    // ------------------------------------------------------------------ reads
+
     /**
-     * GET /ai-chat/status – Check if AI chat is available for current user.
+     * Everything a client needs before it renders anything: whether the chat
+     * works at all, what it runs on, which tools it may reach, and what it is
+     * allowed to spend.
      */
-    public function getStatus(): ResponseInterface
+    public function status(): ResponseInterface
     {
-        $accessDenied = $this->checkAccess();
-        if ($accessDenied !== null) {
-            return $accessDenied;
+        $denied = $this->denyUnauthorised();
+        if ($denied !== null) {
+            return $denied;
         }
-        $taskUid = $this->config->getLlmTaskUid();
-        $mcpEnabled = $this->config->isMcpEnabled();
+
+        $configuration = $this->turnService->configuration();
+        $available = $configuration !== null;
+
         $issues = [];
-        if ($taskUid === 0) {
-            $issues[] = 'No nr-llm Task configured. An admin must create an nr-llm Task record and set its UID in Extension Configuration.';
+        if (!$available) {
+            $issues[] = 'No nr-llm task is configured. An administrator must create an nr-llm task with an LLM '
+                . 'configuration and set its UID as "llmTaskUid" in the extension configuration.';
         }
-        if ($this->config->hasLegacyMcpFields()) {
-            $issues[] = 'Legacy MCP fields (mcpServerCommand/mcpServerArgs) are still set in Extension Configuration. These fields are no longer used. MCP servers are now configured in the List module on PID 0.';
+
+        $allowedTools = $this->toolAccess->allowedToolNames() ?? [];
+        if ($available && $allowedTools === []) {
+            $issues[] = 'No tools are enabled for you. The chat can answer questions but cannot inspect or change '
+                . 'this installation.';
         }
-        $capabilities = $this->chatService->getProviderCapabilities();
+
+        $beUserUid = $this->backendUser->uid();
+        $budget = $this->budgetService->check($beUserUid, 0.0, $configuration);
+
         return new JsonResponse([
-            'available' => $taskUid > 0,
-            'mcpEnabled' => $mcpEnabled,
-            'flueAvailable' => $this->flueWorkflowBridge?->isAvailable() ?? false,
-            'flueFlowUid' => $this->config->getFlueFlowUid(),
-            'activeConversationCount' => $this->repository->countActiveByBeUser($this->getBeUserUid()),
+            'available' => $available,
             'issues' => $issues,
-            ...$capabilities,
+            'configuration' => $available && $configuration !== null ? [
+                'identifier' => $configuration->getIdentifier(),
+                'name' => $configuration->getName(),
+                'provider' => $configuration->getProviderType(),
+                'model' => $configuration->getModelId(),
+            ] : null,
+            'tools' => $this->describeTools($allowedTools),
+            'budget' => [
+                'allowed' => $budget->allowed,
+                'reason' => $budget->reason ?? '',
+            ],
+            'limits' => [
+                'maxMessageLength' => $this->config->getMaxMessageLength(),
+                'maxIterations' => $this->config->getMaxIterations(),
+                'turnsPerMinute' => $this->rateLimiter->limit(),
+                'turnsRemaining' => $this->rateLimiter->remaining($beUserUid),
+                'maxConversations' => $this->config->getMaxConversationsPerUser(),
+                'maxActiveConversations' => $this->config->getMaxActiveConversationsPerUser(),
+                'activeConversations' => $this->conversations->countActiveByBeUser($beUserUid),
+            ],
+            'suggestions' => $this->suggestions($allowedTools),
+            'features' => [
+                'sse' => true,
+                'approvals' => true,
+                'attachments' => true,
+            ],
         ]);
     }
 
-    /**
-     * GET /ai-chat/conversations – List conversations for current user.
-     */
-    public function listConversations(): ResponseInterface
+    public function listConversations(ServerRequestInterface $request): ResponseInterface
     {
-        $accessDenied = $this->checkAccess();
-        if ($accessDenied !== null) {
-            return $accessDenied;
+        $denied = $this->denyUnauthorised();
+        if ($denied !== null) {
+            return $denied;
         }
-        $conversations = $this->repository->findByBeUser($this->getBeUserUid());
-        $items = array_map(static fn(Conversation $c): array => [
-            'uid' => $c->getUid(),
-            'title' => $c->getTitle(),
-            'status' => $c->getStatus()->value,
-            'messageCount' => $c->getMessageCount(),
-            'pinned' => $c->isPinned(),
-            'resumable' => $c->isResumable(),
-            'errorMessage' => $c->getErrorMessage(),
-            'runUuid' => $c->getRunUuid(),
-            'pendingApproval' => $c->getPendingApproval(),
-            'flueRunUid' => $c->getFlueRunUid(),
-            'tstamp' => $c->getTstamp(),
-        ], $conversations);
-        return new JsonResponse(['conversations' => $items]);
-    }
 
-    /**
-     * POST /ai-chat/conversations/create – Create new conversation.
-     */
-    public function createConversation(): ResponseInterface
-    {
-        $accessDenied = $this->checkAccess();
-        if ($accessDenied !== null) {
-            return $accessDenied;
-        }
-        $conversation = new Conversation();
-        $conversation->setBeUser($this->getBeUserUid());
-        $uid = $this->repository->add($conversation);
+        $includeArchived = ($request->getQueryParams()['archived'] ?? '') === '1';
+        $conversations = $this->conversations->findByBeUser($this->backendUser->uid(), $includeArchived);
+
         return new JsonResponse([
-            'uid' => $uid,
-        ], 201);
+            'conversations' => array_map(static fn(Conversation $c): array => $c->toArray(), $conversations),
+        ]);
     }
 
-    /**
-     * GET /ai-chat/conversations/messages?conversationUid={uid}&after={index}
-     */
-    public function getMessages(ServerRequestInterface $request): ResponseInterface
+    public function getConversation(ServerRequestInterface $request): ResponseInterface
     {
-        $accessDenied = $this->checkAccess();
-        if ($accessDenied !== null) {
-            return $accessDenied;
-        }
-
-        /** @var array<string, string> $queryParams */
-        $queryParams = $request->getQueryParams();
-        $uid = (int) ($queryParams['conversationUid'] ?? 0);
-        $afterIndex = (int) ($queryParams['after'] ?? 0);
-
-        // Fast path for polling: check metadata first without loading messages blob
-        if ($afterIndex > 0) {
-            $meta = $this->repository->findPollStatus($uid, $this->getBeUserUid());
-            if ($meta === null) {
-                return new JsonResponse(['error' => 'Conversation not found'], 404);
-            }
-            if ($meta['message_count'] <= $afterIndex) {
-                return new JsonResponse([
-                    'status' => $meta['status'],
-                    'messages' => [],
-                    'totalCount' => $meta['message_count'],
-                    'errorMessage' => $meta['error_message'],
-                    'runUuid' => $meta['run_uuid'] ?? '',
-                    'pendingApproval' => $this->decodeJsonList($meta['pending_approval'] ?? ''),
-                    'executionTrace' => $this->decodeJsonList($meta['execution_trace'] ?? ''),
-                    'flueRunUid' => $meta['flue_run_uid'] ?? 0,
-                ]);
-            }
-        }
-
-        $conversation = $this->findConversationOrFail($request);
+        $conversation = $this->resolveConversation($request);
         if ($conversation instanceof ResponseInterface) {
             return $conversation;
         }
 
-        $messages = $conversation->getDecodedMessages();
-        $newMessages = array_slice($messages, $afterIndex);
+        $after = $this->intParam($request->getQueryParams()['after'] ?? null);
+        $messages = $this->messages->findByConversation($conversation->getUid(), $after);
 
         return new JsonResponse([
-            'status' => $conversation->getStatus()->value,
-            'messages' => $newMessages,
-            'totalCount' => count($messages),
-            'errorMessage' => $conversation->getErrorMessage(),
-            'runUuid' => $conversation->getRunUuid(),
-            'pendingApproval' => $conversation->getPendingApproval(),
-            'executionTrace' => $conversation->getExecutionTrace(),
-            'flueRunUid' => $conversation->getFlueRunUid(),
+            'conversation' => $conversation->toArray(),
+            'messages' => array_map(static fn(Message $m): array => $m->toArray(), $messages),
         ]);
     }
 
     /**
-     * POST /ai-chat/conversations/send
+     * The run's execution trace, straight from nr-llm.
+     *
+     * This extension persists the transcript, not the trace — nr-llm already
+     * holds every step against the run uuid, and a second copy would be a
+     * second thing to purge and to keep honest. The trace is therefore read
+     * back through the runtime under the caller's own actor, which is also what
+     * stops a guessed run uuid from opening somebody else's run.
      */
-    public function sendMessage(ServerRequestInterface $request): ResponseInterface
+    public function runEvents(ServerRequestInterface $request): ResponseInterface
     {
-        $accessDenied = $this->checkAccess();
-        if ($accessDenied !== null) {
-            return $accessDenied;
+        $conversation = $this->resolveConversation($request);
+        if ($conversation instanceof ResponseInterface) {
+            return $conversation;
+        }
+
+        $params = $request->getQueryParams();
+        $runUuid = is_string($params['runUuid'] ?? null) && $params['runUuid'] !== ''
+            ? $params['runUuid']
+            : $conversation->getRunUuid();
+
+        if ($runUuid === '') {
+            return new JsonResponse(['runUuid' => '', 'events' => []]);
+        }
+
+        $after = $this->intParam($params['after'] ?? null, -1);
+        $events = $this->agentRuntime->events($this->backendUser->actor(), $runUuid, $after);
+
+        return new JsonResponse([
+            'runUuid' => $runUuid,
+            'events' => array_map(static fn(AgentRunEvent $event): array => [
+                'sequence' => $event->sequence,
+                'kind' => $event->kind,
+                'round' => $event->round,
+                'durationMs' => $event->durationMs,
+                'payload' => $event->payload,
+                'createdAt' => $event->crdate,
+            ], $events),
+        ]);
+    }
+
+    public function fileInfo(ServerRequestInterface $request): ResponseInterface
+    {
+        $denied = $this->denyUnauthorised();
+        if ($denied !== null) {
+            return $denied;
+        }
+
+        $fileUid = $this->intParam($request->getQueryParams()['fileUid'] ?? null);
+        if ($fileUid <= 0) {
+            return $this->error('A file uid is required.', 400);
+        }
+
+        try {
+            $file = $this->resourceFactory->getFileObject($fileUid);
+        } catch (FileDoesNotExistException) {
+            return $this->error('File not found.', 404);
+        }
+
+        if (!$file->checkActionPermission('read')) {
+            return $this->error('You may not read this file.', 403);
+        }
+
+        return new JsonResponse($this->attachmentStorage->describe($file));
+    }
+
+    // ----------------------------------------------------------------- writes
+
+    public function createConversation(ServerRequestInterface $request): ResponseInterface
+    {
+        $denied = $this->denyUnauthorised();
+        if ($denied !== null) {
+            return $denied;
+        }
+
+        $beUserUid = $this->backendUser->uid();
+        $max = $this->config->getMaxConversationsPerUser();
+        if ($max > 0 && count($this->conversations->findByBeUser($beUserUid, true)) >= $max) {
+            return $this->error(
+                sprintf('You have reached the limit of %d conversations. Archive or delete one first.', $max),
+                429,
+            );
         }
 
         $body = $this->parseBody($request);
-        $conversation = $this->findConversationOrFail($request, $body);
+        $conversation = new Conversation();
+        $conversation->setBeUser($beUserUid);
+        $conversation->setTitle($this->stringValue($body, 'title'));
+        $conversation->setSystemPrompt($this->stringValue($body, 'systemPrompt'));
+
+        $uid = $this->conversations->add($conversation);
+        $created = $this->conversations->findOneByUidAndBeUser($uid, $beUserUid);
+
+        return new JsonResponse(['conversation' => $created?->toArray() ?? ['uid' => $uid]], 201);
+    }
+
+    /**
+     * Start one turn.
+     *
+     * Content negotiation rather than two routes: the client asks for
+     * `text/event-stream` when it wants the turn as it happens, and gets the
+     * same events as one JSON document when it does not.
+     */
+    public function turn(ServerRequestInterface $request): ResponseInterface
+    {
+        $conversation = $this->resolveConversation($request);
         if ($conversation instanceof ResponseInterface) {
             return $conversation;
         }
 
-        $contentValue = $body['content'] ?? null;
-        $content = is_string($contentValue) ? trim($contentValue) : '';
-
+        $body = $this->parseBody($request);
+        $content = trim($this->stringValue($body, 'content'));
         if ($content === '') {
-            return new JsonResponse(['error' => 'Empty message'], 400);
+            return $this->error('A message cannot be empty.', 400);
         }
 
         $maxLength = $this->config->getMaxMessageLength();
         if ($maxLength > 0 && mb_strlen($content) > $maxLength) {
-            return new JsonResponse(['error' => sprintf('Message too long (max %d characters)', $maxLength)], 400);
+            return $this->error(sprintf('A message may be at most %d characters long.', $maxLength), 400);
         }
 
-        $requestedFileUids = [];
-        if (isset($body['fileUids']) && is_array($body['fileUids'])) {
-            foreach ($body['fileUids'] as $requestedFileUid) {
-                $fileUid = $this->positiveInteger($requestedFileUid);
-                if ($fileUid > 0) {
-                    $requestedFileUids[] = $fileUid;
-                }
-            }
-            $requestedFileUids = array_values(array_unique($requestedFileUids));
-        } elseif (isset($body['fileUid'])) {
-            $requestedFileUids = [$this->positiveInteger($body['fileUid'])];
-        }
-        $requestedFileUids = array_values(array_filter($requestedFileUids, static fn(int $uid): bool => $uid > 0));
-
-        if ($this->countFilesInConversation($conversation) + count($requestedFileUids) > 5) {
-            return new JsonResponse(['error' => 'Maximum 5 files per conversation reached'], 400);
-        }
-
-        $attachments = [];
-        foreach ($requestedFileUids as $fileUid) {
-            try {
-                $file = $this->resourceFactory->getFileObject($fileUid);
-                if (!$file->checkActionPermission('read')) {
-                    return new JsonResponse(['error' => self::ERROR_FILE_NOT_FOUND], 404);
-                }
-                $attachments[] = [
-                    'fileUid' => $fileUid,
-                    'fileName' => $file->getName(),
-                    'fileMimeType' => $file->getMimeType(),
-                ];
-            } catch (Exception) {
-                return new JsonResponse(['error' => self::ERROR_FILE_NOT_FOUND], 404);
-            }
-        }
-
-        $currentStatus = $conversation->getStatus();
-        if (in_array($currentStatus, [
-            ConversationStatus::Processing,
-            ConversationStatus::Locked,
-            ConversationStatus::ToolLoop,
-            ConversationStatus::AwaitingApproval,
-            ConversationStatus::FlueRunning,
-        ], true)
-        ) {
-            return new JsonResponse(['error' => self::ERROR_CONVERSATION_PROCESSING], 409);
+        $beUserUid = $this->backendUser->uid();
+        if (!$this->rateLimiter->consume($beUserUid)) {
+            return $this->error(
+                sprintf('You have started too many turns. The limit is %d per minute.', $this->rateLimiter->limit()),
+                429,
+            );
         }
 
         $maxActive = $this->config->getMaxActiveConversationsPerUser();
-        if ($maxActive > 0) {
-            $activeCount = $this->repository->countActiveByBeUser($this->getBeUserUid());
-            if ($activeCount >= $maxActive) {
-                return new JsonResponse(['error' => sprintf('Too many active conversations (max %d)', $maxActive)], 429);
-            }
+        if ($maxActive > 0 && $this->conversations->countActiveByBeUser($beUserUid) >= $maxActive) {
+            return $this->error(
+                sprintf('You already have %d conversations running. Finish or cancel one first.', $maxActive),
+                429,
+            );
         }
 
-        if ($attachments !== []) {
-            $messages = $conversation->getDecodedMessages();
-            $message = [
-                'role' => MessageRole::User->value,
-                'content' => $content,
-                'attachments' => $attachments,
-                'createdAt' => (new DateTimeImmutable())->format(DateTimeInterface::ATOM),
-            ];
-            if (count($attachments) === 1) {
-                $message['fileUid'] = $attachments[0]['fileUid'];
-                $message['fileName'] = $attachments[0]['fileName'];
-                $message['fileMimeType'] = $attachments[0]['fileMimeType'];
-            }
-            $messages[] = $message;
-            $conversation->setMessages($messages);
-            if ($conversation->getTitle() === '') {
-                $conversation->setTitle($content);
-            }
-        } else {
-            $conversation->appendMessage(MessageRole::User, $content);
-        }
-
-        $conversation->setStatus(ConversationStatus::Processing);
-        $conversation->setErrorMessage('');
-
-        // Atomic CAS: write full row only if status still matches,
-        // preventing race conditions with concurrent requests or worker dequeue.
-        $claimed = $this->repository->updateIf($conversation, $currentStatus);
+        // The claim IS the per-conversation lock. Two tabs pressing send at the
+        // same moment must not both run against the same transcript; the loser
+        // is told so rather than silently interleaving with the winner.
+        $runToken = $this->newRunToken();
+        $claimed = $this->conversations->claimForTurn(
+            $conversation->getUid(),
+            $beUserUid,
+            [ConversationStatus::Idle, ConversationStatus::Failed],
+            $runToken,
+        );
         if (!$claimed) {
-            return new JsonResponse(['error' => self::ERROR_CONVERSATION_PROCESSING], 409);
+            return $this->error('This conversation is busy. Wait for the current turn to finish.', 409);
         }
 
-        $this->processor->dispatch($conversation->getUid());
+        $conversation->setRunUuid($runToken);
+        $conversation->setStatus(ConversationStatus::Processing);
 
-        return new JsonResponse(['status' => 'processing'], 202);
+        $attachments = $this->attachments($body);
+        $context = $this->contextOf($body);
+
+        return $this->respondToTurn(
+            $request,
+            fn(TurnEventSink $sink): array => $this->turnService
+                ->run($conversation, $content, $attachments, $context, $sink->emitter())
+                ->toArray(),
+            fn(): bool => $this->approvalService->cancel($conversation),
+        );
+    }
+
+    public function approval(ServerRequestInterface $request): ResponseInterface
+    {
+        $conversation = $this->resolveConversation($request);
+        if ($conversation instanceof ResponseInterface) {
+            return $conversation;
+        }
+
+        $body = $this->parseBody($request);
+        $approved = ($body['approved'] ?? null) === true;
+        $turnDigest = $this->stringValue($body, 'turnDigest');
+
+        return $this->respondToTurn(
+            $request,
+            fn(TurnEventSink $sink): array => $this->approvalService
+                ->decide($conversation, $approved, $turnDigest, $sink->emitter())
+                ->toArray(),
+            fn(): bool => $this->approvalService->cancel($conversation),
+        );
+    }
+
+    public function cancel(ServerRequestInterface $request): ResponseInterface
+    {
+        $conversation = $this->resolveConversation($request);
+        if ($conversation instanceof ResponseInterface) {
+            return $conversation;
+        }
+
+        $cancelled = $this->approvalService->cancel($conversation);
+
+        return new JsonResponse(['cancelled' => $cancelled, 'status' => ConversationStatus::Idle->value]);
+    }
+
+    public function archive(ServerRequestInterface $request): ResponseInterface
+    {
+        $conversation = $this->resolveConversation($request);
+        if ($conversation instanceof ResponseInterface) {
+            return $conversation;
+        }
+
+        $body = $this->parseBody($request);
+        $archived = ($body['archived'] ?? true) !== false;
+        $this->conversations->updateArchived($conversation->getUid(), $archived, $conversation->getBeUser());
+
+        return new JsonResponse(['archived' => $archived]);
+    }
+
+    public function pin(ServerRequestInterface $request): ResponseInterface
+    {
+        $conversation = $this->resolveConversation($request);
+        if ($conversation instanceof ResponseInterface) {
+            return $conversation;
+        }
+
+        $body = $this->parseBody($request);
+        $pinned = array_key_exists('pinned', $body) ? $body['pinned'] === true : !$conversation->isPinned();
+        $this->conversations->updatePinned($conversation->getUid(), $pinned, $conversation->getBeUser());
+
+        return new JsonResponse(['pinned' => $pinned]);
+    }
+
+    public function rename(ServerRequestInterface $request): ResponseInterface
+    {
+        $conversation = $this->resolveConversation($request);
+        if ($conversation instanceof ResponseInterface) {
+            return $conversation;
+        }
+
+        $body = $this->parseBody($request);
+        $title = trim($this->stringValue($body, 'title'));
+        if ($title === '') {
+            return $this->error('A title cannot be empty.', 400);
+        }
+
+        $this->conversations->updateTitle($conversation->getUid(), $title, $conversation->getBeUser());
+
+        if (array_key_exists('autoApproveTools', $body)) {
+            $this->conversations->updateAutoApproveTools(
+                $conversation->getUid(),
+                $body['autoApproveTools'] === true,
+                $conversation->getBeUser(),
+            );
+        }
+
+        return new JsonResponse(['title' => mb_substr($title, 0, 255)]);
     }
 
     /**
-     * POST /ai-chat/file-upload – Upload a file to FAL for use as chat attachment.
+     * Soft-delete: the row survives for the cleanup command, which removes it
+     * with its messages and its uploaded files once retention has passed.
      */
+    public function delete(ServerRequestInterface $request): ResponseInterface
+    {
+        $conversation = $this->resolveConversation($request);
+        if ($conversation instanceof ResponseInterface) {
+            return $conversation;
+        }
+
+        $this->conversations->softDelete($conversation->getUid(), $conversation->getBeUser());
+
+        return new JsonResponse(['deleted' => true]);
+    }
+
     public function fileUpload(ServerRequestInterface $request): ResponseInterface
     {
-        $accessDenied = $this->checkAccess();
-        if ($accessDenied !== null) {
-            return $accessDenied;
+        $conversation = $this->resolveConversation($request);
+        if ($conversation instanceof ResponseInterface) {
+            return $conversation;
         }
 
-        /** @var array<string, \Psr\Http\Message\UploadedFileInterface> $uploadedFiles */
-        $uploadedFiles = $request->getUploadedFiles();
-        $file = $uploadedFiles['file'] ?? null;
-
-        if ($file === null || $file->getError() !== UPLOAD_ERR_OK) {
-            return new JsonResponse(['error' => 'No file uploaded'], 400);
+        $uploaded = $request->getUploadedFiles()['file'] ?? null;
+        if (!$uploaded instanceof UploadedFileInterface || $uploaded->getError() !== UPLOAD_ERR_OK) {
+            return $this->error('No file was uploaded.', 400);
         }
 
-        $capabilities = $this->chatService->getProviderCapabilities();
-        // $capabilities['supportedFormats'] contains file extensions (e.g. 'png', 'jpg') because
-        // the frontend uses them for the <input accept> filter.  finfo returns MIME types, so we
-        // map extensions to MIME types before comparing.
-        $extensionMimeMap = [
-            'png'  => 'image/png',
-            'jpg'  => 'image/jpeg',
-            'jpeg' => 'image/jpeg',
-            'gif'  => 'image/gif',
-            'webp' => 'image/webp',
-            'pdf'  => 'application/pdf',
-        ];
-        $providerMimeTypes = array_values(array_filter(array_map(
-            static fn(string $ext): ?string => $extensionMimeMap[$ext] ?? null,
-            $capabilities['supportedFormats'],
-        )));
-        $allowedMimeTypes = array_values(array_unique(array_merge(
-            $providerMimeTypes,
-            $this->documentExtractorRegistry->getAvailableMimeTypes(),
-        )));
-
-        $maxSize = 20 * 1024 * 1024; // 20 MB
-        if ($file->getSize() > $maxSize) {
-            return new JsonResponse(['error' => 'File too large (max 20 MB)'], 400);
+        $size = $uploaded->getSize();
+        if ($size !== null && $size > self::MAX_UPLOAD_BYTES) {
+            return $this->error('The file is larger than 20 MB.', 400);
         }
 
-        // Validate MIME type server-side via finfo — client-supplied Content-Type is untrusted
-        $uri = $file->getStream()->getMetadata('uri');
+        $uri = $uploaded->getStream()->getMetadata('uri');
         $tempPath = is_string($uri) ? $uri : '';
-        $finfo = new finfo(FILEINFO_MIME_TYPE);
-        $detectedMime = $finfo->file($tempPath);
-        if (!is_string($detectedMime) || !in_array($detectedMime, $allowedMimeTypes, true)) {
-            return new JsonResponse(['error' => 'File type not supported'], 422);
+        if ($tempPath === '' || !is_file($tempPath)) {
+            return $this->error('The upload could not be read.', 400);
         }
 
-        // For extraction-backed formats, run lightweight validation at upload time
-        if ($this->documentExtractorRegistry->canExtract($detectedMime)) {
-            try {
-                $this->documentExtractorRegistry->validate($tempPath, $detectedMime);
-            } catch (RuntimeException $e) {
-                return new JsonResponse(['error' => 'File could not be processed: ' . $e->getMessage()], 422);
+        // The client's Content-Type is a claim, not a fact: the type is detected
+        // from the bytes, because it decides which parser runs next.
+        $detected = (new finfo(FILEINFO_MIME_TYPE))->file($tempPath);
+        if (!is_string($detected) || !$this->documentExtractors->canExtract($detected)) {
+            return $this->error('This file type is not supported.', 422);
+        }
+
+        try {
+            $this->documentExtractors->validate($tempPath, $detected);
+        } catch (RuntimeException $exception) {
+            return $this->error('The file could not be read: ' . $exception->getMessage(), 422);
+        }
+
+        try {
+            $folder = $this->attachmentStorage->folderFor($conversation->getBeUser(), $conversation->getUid());
+            $file = $folder->getStorage()->addFile(
+                $tempPath,
+                $folder,
+                $uploaded->getClientFilename() ?? 'upload',
+            );
+        } catch (Throwable $exception) {
+            return $this->error(
+                'The file could not be stored: ' . ErrorMessageSanitizer::sanitize($exception->getMessage()),
+                500,
+            );
+        }
+
+        return new JsonResponse($this->attachmentStorage->describe($file), 201);
+    }
+
+    // ---------------------------------------------------------------- helpers
+
+    /**
+     * One producer, two transports.
+     *
+     * @param Closure(TurnEventSink): array<string, mixed> $producer
+     * @param Closure(): bool                              $onAbort
+     */
+    private function respondToTurn(
+        ServerRequestInterface $request,
+        Closure $producer,
+        Closure $onAbort,
+    ): ResponseInterface {
+        if ($this->wantsEventStream($request)) {
+            $stream = new ServerSentEventStream(
+                producer: static function (TurnEventSink $sink) use ($producer): void {
+                    try {
+                        $producer($sink);
+                    } catch (ChatException $exception) {
+                        $sink->emit('run.error', ['message' => $exception->getMessage()]);
+                    } catch (Throwable $exception) {
+                        $sink->emit('run.error', [
+                            'message' => ErrorMessageSanitizer::sanitize($exception->getMessage()),
+                        ]);
+                    }
+                },
+                onAbort: static function () use ($onAbort): void {
+                    $onAbort();
+                },
+            );
+
+            return new Response($stream, 200, ServerSentEventStream::headers());
+        }
+
+        $sink = new TurnEventSink();
+        try {
+            $result = $producer($sink);
+        } catch (ChatException $exception) {
+            return $this->error($exception->getMessage(), 409);
+        } catch (Throwable $exception) {
+            return $this->error(ErrorMessageSanitizer::sanitize($exception->getMessage()), 500);
+        }
+
+        return new JsonResponse($result + ['events' => $sink->collected()]);
+    }
+
+    private function wantsEventStream(ServerRequestInterface $request): bool
+    {
+        return str_contains(strtolower($request->getHeaderLine('Accept')), 'text/event-stream');
+    }
+
+    private function resolveConversation(ServerRequestInterface $request): Conversation|ResponseInterface
+    {
+        $denied = $this->denyUnauthorised();
+        if ($denied !== null) {
+            return $denied;
+        }
+
+        $body = $this->parseBody($request);
+        $uid = $this->intParam($request->getQueryParams()['conversation'] ?? $body['conversation'] ?? null);
+
+        $conversation = $this->conversations->findOneByUidAndBeUser($uid, $this->backendUser->uid());
+
+        return $conversation ?? $this->error('Conversation not found.', 404);
+    }
+
+    private function denyUnauthorised(): ?ResponseInterface
+    {
+        if ($this->backendUser->mayUseChat($this->config->getAllowedGroupIds())) {
+            return null;
+        }
+
+        return $this->error('You may not use TYPO3 AI Chat.', 403);
+    }
+
+    /**
+     * @param list<string> $toolNames
+     *
+     * @return list<array{name: string, mcpName: string|null, effect: string, requiresApproval: bool}>
+     */
+    private function describeTools(array $toolNames): array
+    {
+        $tools = [];
+        foreach ($this->effectLookup->describe($toolNames) as $name => $facts) {
+            $tools[] = [
+                'name' => $name,
+                'mcpName' => McpCatalogTool::mcpName($name),
+                'effect' => $facts['effect'],
+                'requiresApproval' => $facts['requiresApproval'],
+            ];
+        }
+
+        return $tools;
+    }
+
+    /**
+     * Openers the chat can honestly offer, given what this user may actually
+     * reach. Suggesting an action whose tool is disabled would teach the user
+     * to distrust every suggestion after it.
+     *
+     * @param list<string> $allowedTools
+     *
+     * @return list<string>
+     */
+    private function suggestions(array $allowedTools): array
+    {
+        $mcpNames = [];
+        foreach ($allowedTools as $name) {
+            $mcpName = McpCatalogTool::mcpName($name);
+            if ($mcpName !== null) {
+                $mcpNames[] = $mcpName;
             }
         }
 
-        $storage = $this->storageRepository->getDefaultStorage();
-        if ($storage === null) {
-            return new JsonResponse(['error' => 'No default storage configured'], 500);
+        $candidates = [
+            'GetPageTree' => 'Show me the page tree below the site root.',
+            'Search' => 'Find every page that mentions our old product name.',
+            'GetPage' => 'Summarise the content elements on this page.',
+            'ReadTable' => 'List the ten most recently changed news records.',
+            'GetSystemLog' => 'What errors has this installation logged today?',
+        ];
+
+        $suggestions = [];
+        foreach ($candidates as $tool => $prompt) {
+            if (in_array($tool, $mcpNames, true)) {
+                $suggestions[] = $prompt;
+            }
         }
 
-        $beUserUid = $this->getBeUserUid();
-        $targetFolder = $this->getOrCreateUploadFolder($storage, $beUserUid);
-
-        $clientFilename = $file->getClientFilename() ?? 'upload';
-        $falFile = $storage->addFile(
-            $tempPath,
-            $targetFolder,
-            $clientFilename,
-        );
-
-        return new JsonResponse([
-            'fileUid' => $falFile->getUid(),
-            'name' => $falFile->getName(),
-            'mimeType' => $falFile->getMimeType(),
-            'size' => $falFile->getSize(),
-        ]);
+        return $suggestions;
     }
 
     /**
-     * GET /ai-chat/file-info?fileUid={uid} – Resolve FAL file metadata by UID.
+     * @param array<string, mixed> $body
+     *
+     * @return list<array<string, mixed>>
      */
-    public function fileInfo(ServerRequestInterface $request): ResponseInterface
+    private function attachments(array $body): array
     {
-        $accessDenied = $this->checkAccess();
-        if ($accessDenied !== null) {
-            return $accessDenied;
+        $raw = $body['attachments'] ?? null;
+        if (!is_array($raw)) {
+            return [];
         }
 
-        /** @var array<string, string> $params */
-        $params = $request->getQueryParams();
-        $rawUid = $params['fileUid'] ?? '';
+        $attachments = [];
+        foreach ($raw as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+            $fileUid = is_numeric($entry['fileUid'] ?? null) ? (int)$entry['fileUid'] : 0;
+            if ($fileUid <= 0) {
+                continue;
+            }
 
-        if ($rawUid === '' || !ctype_digit((string) $rawUid) || (int) $rawUid <= 0) {
-            return new JsonResponse(['error' => 'Invalid fileUid'], 400);
+            try {
+                $file = $this->resourceFactory->getFileObject($fileUid);
+            } catch (Throwable) {
+                continue;
+            }
+
+            // A uid in a request body is a claim about a file, not permission to
+            // read it — so the permission is checked here rather than trusted.
+            if (!$file->checkActionPermission('read')) {
+                continue;
+            }
+
+            $attachments[] = $this->attachmentStorage->describe($file);
         }
 
-        try {
-            $file = $this->resourceFactory->getFileObject((int) $rawUid);
-        } catch (Exception) {
-            return new JsonResponse(['error' => self::ERROR_FILE_NOT_FOUND], 404);
-        }
-
-        if (!$file->checkActionPermission('read')) {
-            return new JsonResponse(['error' => 'Access denied'], 403);
-        }
-
-        $supported = array_values(array_unique(array_merge(
-            $this->chatService->getProviderCapabilities()['supportedFormats'],
-            $this->documentExtractorRegistry->getAvailableExtensions(),
-        )));
-        if (!in_array(strtolower($file->getExtension()), $supported, true)) {
-            return new JsonResponse(['error' => 'Unsupported file type'], 422);
-        }
-
-        return new JsonResponse([
-            'fileUid'  => $file->getUid(),
-            'name'     => $file->getName(),
-            'mimeType' => $file->getMimeType(),
-            'size'     => $file->getSize(),
-        ]);
+        return $attachments;
     }
 
     /**
-     * POST /ai-chat/conversations/resume
+     * @param array<string, mixed> $body
+     *
+     * @return array<string, mixed>
      */
-    public function resumeConversation(ServerRequestInterface $request): ResponseInterface
+    private function contextOf(array $body): array
     {
-        $accessDenied = $this->checkAccess();
-        if ($accessDenied !== null) {
-            return $accessDenied;
+        $context = $body['context'] ?? null;
+        if (!is_array($context)) {
+            return [];
         }
 
-        $conversation = $this->findConversationOrFail($request);
-        if ($conversation instanceof ResponseInterface) {
-            return $conversation;
+        $normalised = [];
+        foreach ($context as $key => $value) {
+            if (is_string($key)) {
+                $normalised[$key] = $value;
+            }
         }
 
-        if (!$conversation->isResumable()) {
-            return new JsonResponse(['error' => 'Conversation is not resumable'], 400);
-        }
-
-        $currentStatus = $conversation->getStatus();
-
-        $conversation->setStatus(ConversationStatus::Processing);
-        $conversation->setErrorMessage('');
-
-        // Atomic CAS: write full row only if status still matches.
-        $claimed = $this->repository->updateIf($conversation, $currentStatus);
-        if (!$claimed) {
-            return new JsonResponse(['error' => self::ERROR_CONVERSATION_PROCESSING], 409);
-        }
-
-        $this->processor->dispatch($conversation->getUid());
-
-        return new JsonResponse(['status' => 'processing'], 202);
-    }
-
-    /**
-     * POST /ai-chat/conversations/approval
-     */
-    public function decideApproval(ServerRequestInterface $request): ResponseInterface
-    {
-        $accessDenied = $this->checkAccess();
-        if ($accessDenied !== null) {
-            return $accessDenied;
-        }
-
-        $body = $this->parseBody($request);
-        $conversation = $this->findConversationOrFail($request, $body);
-        if ($conversation instanceof ResponseInterface) {
-            return $conversation;
-        }
-        if ($conversation->getStatus() !== ConversationStatus::AwaitingApproval) {
-            return new JsonResponse(['error' => 'Conversation is not awaiting approval'], 409);
-        }
-
-        try {
-            $this->chatService->decideApproval(
-                $conversation,
-                ($body['approved'] ?? false) === true,
-                $this->getBeUserUid(),
-            );
-        } catch (Throwable $exception) {
-            return new JsonResponse(['error' => $exception->getMessage()], 409);
-        }
-
-        return new JsonResponse(['status' => $conversation->getStatus()->value]);
-    }
-
-    /**
-     * POST /ai-chat/flue/trigger
-     */
-    public function triggerFlue(ServerRequestInterface $request): ResponseInterface
-    {
-        $accessDenied = $this->checkAccess();
-        if ($accessDenied !== null) {
-            return $accessDenied;
-        }
-
-        $body = $this->parseBody($request);
-        $conversation = $this->findConversationOrFail($request, $body);
-        if ($conversation instanceof ResponseInterface) {
-            return $conversation;
-        }
-
-        $contentValue = $body['content'] ?? null;
-        $content = is_string($contentValue) ? trim($contentValue) : '';
-        $pageUid = $this->positiveInteger($body['pageUid'] ?? null);
-        if ($content === '') {
-            return new JsonResponse(['error' => 'Empty workflow request'], 400);
-        }
-        if ($conversation->getStatus() !== ConversationStatus::Idle
-            && $conversation->getStatus() !== ConversationStatus::Failed
-        ) {
-            return new JsonResponse(['error' => self::ERROR_CONVERSATION_PROCESSING], 409);
-        }
-        if ($this->flueWorkflowBridge === null) {
-            return new JsonResponse(['error' => 'Flue is not available.'], 409);
-        }
-
-        try {
-            $result = $this->flueWorkflowBridge->trigger(
-                $conversation,
-                $content,
-                $pageUid,
-                (int) ($this->getBackendUser()['workspace_id'] ?? 0),
-                $this->getBeUserUid(),
-            );
-        } catch (Throwable $exception) {
-            return new JsonResponse(['error' => $exception->getMessage()], 409);
-        }
-
-        return new JsonResponse($result, 202);
-    }
-
-    /**
-     * GET /ai-chat/flue/status?conversationUid={uid}
-     */
-    public function flueStatus(ServerRequestInterface $request): ResponseInterface
-    {
-        $accessDenied = $this->checkAccess();
-        if ($accessDenied !== null) {
-            return $accessDenied;
-        }
-
-        $conversation = $this->findConversationOrFail($request);
-        if ($conversation instanceof ResponseInterface) {
-            return $conversation;
-        }
-        if ($this->flueWorkflowBridge === null) {
-            return new JsonResponse(['error' => 'Flue is not available.'], 409);
-        }
-
-        try {
-            $flue = $this->flueWorkflowBridge->synchronize($conversation);
-        } catch (Throwable $exception) {
-            return new JsonResponse(['error' => $exception->getMessage()], 409);
-        }
-
-        return new JsonResponse([
-            'flue' => $flue,
-            'status' => $conversation->getStatus()->value,
-            'messages' => $conversation->getDecodedMessages(),
-            'totalCount' => $conversation->getMessageCount(),
-            'errorMessage' => $conversation->getErrorMessage(),
-            'executionTrace' => $conversation->getExecutionTrace(),
-            'pendingApproval' => $conversation->getPendingApproval(),
-            'flueRunUid' => $conversation->getFlueRunUid(),
-        ]);
-    }
-
-    /**
-     * POST /ai-chat/conversations/archive
-     */
-    public function archiveConversation(ServerRequestInterface $request): ResponseInterface
-    {
-        $accessDenied = $this->checkAccess();
-        if ($accessDenied !== null) {
-            return $accessDenied;
-        }
-
-        $conversation = $this->findConversationOrFail($request);
-        if ($conversation instanceof ResponseInterface) {
-            return $conversation;
-        }
-
-        $this->repository->updateArchived($conversation->getUid(), true, $this->getBeUserUid());
-
-        return new JsonResponse(['status' => 'archived']);
-    }
-
-    /**
-     * POST /ai-chat/conversations/pin
-     */
-    public function togglePin(ServerRequestInterface $request): ResponseInterface
-    {
-        $accessDenied = $this->checkAccess();
-        if ($accessDenied !== null) {
-            return $accessDenied;
-        }
-
-        $conversation = $this->findConversationOrFail($request);
-        if ($conversation instanceof ResponseInterface) {
-            return $conversation;
-        }
-
-        $newPinned = !$conversation->isPinned();
-        $this->repository->updatePinned($conversation->getUid(), $newPinned, $this->getBeUserUid());
-
-        return new JsonResponse(['pinned' => $newPinned]);
-    }
-
-    /**
-     * POST /ai-chat/conversations/rename
-     */
-    public function renameConversation(ServerRequestInterface $request): ResponseInterface
-    {
-        $accessDenied = $this->checkAccess();
-        if ($accessDenied !== null) {
-            return $accessDenied;
-        }
-
-        // Parse body once — PSR-7 streams are one-shot; passing $body to
-        // findConversationOrFail avoids reading the stream a second time.
-        $body = $this->parseBody($request);
-        $conversation = $this->findConversationOrFail($request, $body);
-        if ($conversation instanceof ResponseInterface) {
-            return $conversation;
-        }
-
-        $titleValue = $body['title'] ?? null;
-        $title = is_string($titleValue) ? trim($titleValue) : '';
-        if ($title === '') {
-            return new JsonResponse(['error' => 'Title must not be empty'], 400);
-        }
-
-        $this->repository->updateTitle($conversation->getUid(), $title, $this->getBeUserUid());
-
-        return new JsonResponse(['title' => $title]);
-    }
-
-    /**
-     * @param array<string, mixed>|null $parsedBody
-     */
-    private function findConversationOrFail(ServerRequestInterface $request, ?array $parsedBody = null): Conversation|ResponseInterface
-    {
-        $body = $parsedBody ?? $this->parseBody($request);
-        /** @var array<string, string> $queryParams */
-        $queryParams = $request->getQueryParams();
-        $uid = $this->positiveInteger($queryParams['conversationUid'] ?? $body['conversationUid'] ?? null);
-
-        $conversation = $this->repository->findOneByUidAndBeUser($uid, $this->getBeUserUid());
-
-        if ($conversation === null) {
-            return new JsonResponse(['error' => 'Conversation not found'], 404);
-        }
-
-        return $conversation;
-    }
-
-    private function checkAccess(): ?ResponseInterface
-    {
-        $allowedGroups = $this->config->getAllowedGroupIds();
-        if ($allowedGroups === []) {
-            return null;
-        }
-
-        $beUser = $this->getBackendUser();
-
-        if (((int) ($beUser['admin'] ?? 0)) === 1) {
-            return null;
-        }
-
-        $userGroups = GeneralUtility::intExplode(
-            ',',
-            (string) ($beUser['usergroup'] ?? ''),
-            true,
-        );
-
-        if (array_intersect($allowedGroups, $userGroups) !== []) {
-            return null;
-        }
-
-        return new JsonResponse(['error' => 'Access denied'], 403);
+        return $normalised;
     }
 
     /**
@@ -690,85 +682,60 @@ final readonly class ChatApiController
      */
     private function parseBody(ServerRequestInterface $request): array
     {
-        /** @var array<string, mixed> $body */
-        $body = json_decode((string) $request->getBody(), true) ?? [];
-        return $body;
-    }
-
-    private function getBeUserUid(): int
-    {
-        return (int) ($this->getBackendUser()['uid'] ?? 0);
-    }
-
-    private function countFilesInConversation(Conversation $conversation): int
-    {
-        $messages = $conversation->getDecodedMessages();
-        $count = 0;
-        foreach ($messages as $message) {
-            if (isset($message['attachments']) && is_array($message['attachments'])) {
-                $count += count($message['attachments']);
-            } elseif (isset($message['fileUid'])) {
-                ++$count;
-            }
+        $parsed = $request->getParsedBody();
+        if (is_array($parsed) && $parsed !== []) {
+            return $this->stringKeyed($parsed);
         }
 
-        return $count;
-    }
+        $decoded = json_decode((string)$request->getBody(), true);
 
-    private function getOrCreateUploadFolder(ResourceStorage $storage, int $beUserUid): Folder
-    {
-        $basePath = 'typo3-ai-chat/' . $beUserUid;
-        if (!$storage->hasFolder($basePath)) {
-            return $storage->createFolder($basePath);
-        }
-        return $storage->getFolder($basePath);
+        return is_array($decoded) ? $this->stringKeyed($decoded) : [];
     }
 
     /**
-     * @return array<string, string|int>
+     * @param array<array-key, mixed> $values
+     *
+     * @return array<string, mixed>
      */
-    private function getBackendUser(): array
+    private function stringKeyed(array $values): array
     {
-        // BE_USER is always set for authenticated backend requests; no DI alternative exists.
-        /** @var object{user: array<string, string|int>} $beUser */
-        $beUser = $GLOBALS['BE_USER'];
-        return $beUser->user;
-    }
-
-    /** @return list<array<string, mixed>> */
-    private function decodeJsonList(string $json): array
-    {
-        $decoded = json_decode($json, true);
-        if (!is_array($decoded)) {
-            return [];
-        }
-
         $result = [];
-        foreach ($decoded as $item) {
-            if (!is_array($item)) {
-                continue;
+        foreach ($values as $key => $value) {
+            if (is_string($key)) {
+                $result[$key] = $value;
             }
-            $normalized = [];
-            foreach ($item as $key => $value) {
-                if (is_string($key)) {
-                    $normalized[$key] = $value;
-                }
-            }
-            $result[] = $normalized;
         }
 
         return $result;
     }
 
-    private function positiveInteger(mixed $value): int
+    /**
+     * @param array<string, mixed> $body
+     */
+    private function stringValue(array $body, string $key): string
     {
-        if (is_int($value)) {
-            return max(0, $value);
-        }
-        if (is_string($value) && ctype_digit($value)) {
-            return (int) $value;
-        }
+        $value = $body[$key] ?? '';
 
-        return 0;
+        return is_string($value) ? $value : '';
+    }
+
+    private function intParam(mixed $value, int $default = 0): int
+    {
+        return is_numeric($value) ? (int)$value : $default;
+    }
+
+    private function error(string $message, int $status): JsonResponse
+    {
+        return new JsonResponse(['error' => $message], $status);
+    }
+
+    /**
+     * A per-turn token that claims the conversation before the runtime has
+     * handed us a run uuid. The runtime's own uuid replaces it as soon as the
+     * run is persisted; until then this is what makes the claim unique.
+     */
+    private function newRunToken(): string
+    {
+        return 'pending-' . bin2hex(random_bytes(16));
     }
 }
