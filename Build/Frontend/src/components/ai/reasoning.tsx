@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import type { ComponentProps, ReactNode } from 'react';
 import { BrainIcon, ChevronDownIcon } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -53,20 +53,14 @@ export function Reasoning({
   children,
   ...props
 }: ReasoningProps) {
-  const [isOpen, setIsOpen] = useState(defaultOpen || isStreaming);
-  const [touched, setTouched] = useState(false);
+  // Derived, not synchronised. `null` means "the user has not decided", in
+  // which case the panel simply follows the run — which is why there is no
+  // effect here: an effect that pushed `isStreaming` into state would render
+  // twice for every frame of a stream.
+  const [choice, setChoice] = useState<boolean | null>(defaultOpen ? true : null);
+  const isOpen = choice ?? isStreaming;
 
-  useEffect(() => {
-    if (touched) {
-      return;
-    }
-    setIsOpen(isStreaming);
-  }, [isStreaming, touched]);
-
-  const handleOpenChange = useCallback((open: boolean) => {
-    setTouched(true);
-    setIsOpen(open);
-  }, []);
+  const handleOpenChange = useCallback((open: boolean) => setChoice(open), []);
 
   const value = useMemo(() => ({ isOpen, isStreaming }), [isOpen, isStreaming]);
 

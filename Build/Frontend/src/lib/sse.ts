@@ -59,17 +59,20 @@ export class SseParser {
   private lastEventId: number | undefined;
 
   /**
+   * @param final true when the body has ended and nothing more can arrive
+   *
    * @returns every complete frame the added text finished, in order
    */
-  push(chunk: string): Frame[] {
+  push(chunk: string, final = false): Frame[] {
     this.buffer += chunk;
 
     // Normalise the three legal line endings to one. Done on the buffer rather
-    // than on the chunk because a `\r\n` can be split across two reads, and a
-    // lone trailing `\r` must therefore stay in the buffer until its partner
-    // arrives — so hold it back.
+    // than on the chunk because a `\r\n` can be split across two reads: a lone
+    // trailing `\r` might be the first half of one, so it waits for its partner
+    // — unless the stream has ended, in which case it was a line ending all
+    // along and holding it would swallow the last frame.
     this.buffer = this.buffer.replace(/\r\n/g, '\n');
-    const trailingCarriageReturn = this.buffer.endsWith('\r');
+    const trailingCarriageReturn = !final && this.buffer.endsWith('\r');
     const body = trailingCarriageReturn ? this.buffer.slice(0, -1) : this.buffer;
     const normalised = body.replace(/\r/g, '\n');
 
@@ -201,7 +204,9 @@ export async function readEventStream(
       }
     }
 
-    for (const frame of parser.push(decoder.decode())) {
+    // Flush: the decoder's tail, and a final `\r` that was waiting for a `\n`
+    // that is never coming.
+    for (const frame of parser.push(decoder.decode(), true)) {
       const event = toSequencedEvent(frame);
       if (event !== null) {
         onEvent(event);

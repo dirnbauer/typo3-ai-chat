@@ -246,7 +246,10 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       return {
         ...initialThreadState,
         conversation: action.conversation,
-        items: action.messages
+        // `messages` comes straight off a JSON body. A server that omitted it
+        // must not take the thread down with it — the reducer's job is to hold
+        // state, not to trust a payload.
+        items: (Array.isArray(action.messages) ? action.messages : [])
           .filter((message) => message.role === 'user' || message.role === 'assistant')
           .filter((message) => message.content !== '')
           .map(messageItem),
