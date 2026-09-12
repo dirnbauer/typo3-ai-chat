@@ -35,8 +35,10 @@ Routes
         - One conversation with its messages. ``?after=<sequence>`` for the tail.
     *   - GET
         - ``conversations/events``
-        - The run's execution trace, read from nr-llm. ``?runUuid=`` and
-          ``?after=<sequence>``.
+        - The run's execution trace, read from nr-llm. ``?conversation=`` is
+          required — the trace is authorised through the conversation, not
+          through the run uuid — plus optional ``?runUuid=`` (defaults to the
+          conversation's current run) and ``?after=<sequence>``.
     *   - GET
         - ``files/info``
         - FAL metadata for ``?fileUid=``.
@@ -66,7 +68,9 @@ Routes
         - Soft delete; the cleanup command prunes it later.
     *   - POST
         - ``files/upload``
-        - ``multipart/form-data`` with ``file``.
+        - ``multipart/form-data`` with ``file`` **and** ``conversation``: the
+          upload is stored in that conversation's own folder, so it is
+          authorised the same way every other write is.
 
 Starting a turn
 ===============
@@ -160,7 +164,10 @@ Status codes
     *   - Code
         - Meaning
     *   - 400
-        - Empty or over-long message, missing parameter.
+        - Empty or over-long message, missing parameter, or an upload larger
+          than 20 MB. (The size cap is a parameter problem — nothing has been
+          read yet. 422 is reserved for a file that WAS read and could not be
+          made sense of.)
     *   - 403
         - The user may not use the chat.
     *   - 404

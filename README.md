@@ -59,13 +59,11 @@ vendor/bin/typo3 extension:setup
 vendor/bin/typo3 database:updateschema
 ```
 
-The MCP server fork is distributed over Git, so the consuming project needs
-VCS repository entries for `dirnbauer/typo3-mcp-server` and
-`dirnbauer/typo3-abilities`.
-
+The MCP server fork is distributed over Git, so the consuming project needs VCS
+repository entries for `dirnbauer/typo3-mcp-server` and `dirnbauer/typo3-abilities`.
 Then point `llmTaskUid` at an nr-llm Task in **Admin Tools → Settings →
-Extension Configuration**, and enable the write tools you want in
-**AI → Tools**. Full instructions: [Documentation/](Documentation/).
+Extension Configuration**, and enable the write tools you want in **AI → Tools**.
+Full instructions: [Documentation/](Documentation/).
 
 ## Upgrading from 1.x
 
@@ -82,19 +80,27 @@ left claimed by a request that died.
 ## Development
 
 ```bash
-composer ci:cgl        # coding standards
-composer ci:phpstan    # level 10
-composer ci:tests      # unit + functional
+composer ci:cgl      # coding standards
+composer ci:phpstan  # level 10
+composer ci:tests    # unit + functional
 ```
 
 The functional suite runs on sqlite locally and against MariaDB in CI; the
 switch is environment variables only. An agent loop is tested with a scripted
-provider — a real nr-llm adapter driven by a queued response file, registered
-only outside production and only behind an explicit environment flag. See
+nr-llm adapter driven by a queued response file, registered only outside
+production and behind an environment flag. See
 [Documentation/Developer/Testing.rst](Documentation/Developer/Testing.rst).
 
 The frontend is a React/shadcn bundle rendering `<wc-ai-chat>` in a Shadow DOM;
 the PHP side renders the mount point and serves the JSON/SSE API.
+
+```bash
+npm ci && npm run build   # → Resources/Public/JavaScript/Dist/app.js (committed)
+npm test && npm run lint  # vitest, then tsc + eslint
+```
+
+CI rebuilds the bundle and fails if it differs, so rebuild and commit it with
+any source change.
 
 ## Credits — thank you, Netresearch
 

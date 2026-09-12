@@ -22,6 +22,50 @@ the panel for a quick question, the module for a long session.
     The toolbar button appears once an administrator has configured an nr-llm
     task and granted you access.
 
+The two surfaces
+================
+
+They are one chat with two shapes. Nothing is available in only one of them
+except the room to show it.
+
+**The panel** is a drawer on the right-hand edge, over whatever module you are
+in. It opens from the toolbar button and closes with that button, with the ✕ in
+its header, or with :kbd:`Esc`.
+
+Drag its left edge to resize it, or focus that edge with :kbd:`Tab` and use
+:kbd:`←` and :kbd:`→` (hold :kbd:`Shift` for larger steps, :kbd:`Home` to go
+back to the default). The width you choose is remembered for next time, per
+browser.
+
+The panel is part of the backend's frame rather than of the module inside it,
+so it survives clicking through the page tree: you can ask a question, open
+three pages while the model works, and the answer is still there. Its header
+has a **New conversation** button and an **expand** button that opens the
+current conversation in the full module.
+
+**The module** (:guilabel:`Tools` > :guilabel:`TYPO3 AI Chat`) is the same chat
+in three columns:
+
+-   *left* — every conversation you own. Create, rename, pin, archive and
+    delete are here; pinned conversations sort first, then the most recently
+    used. Archived ones are hidden until you tick **Show archived**.
+-   *middle* — the conversation itself, identical to the panel's.
+-   *right* — what the run is doing: every tool it called with the effect and
+    the time it took, anything waiting for your approval, the tokens this turn
+    has used, your remaining budget and rate limits, and the list of tools you
+    are allowed to reach.
+
+The left and right columns fold away on a narrow window, which leaves the
+panel's layout.
+
+Light and dark
+==============
+
+The chat follows the backend's appearance setting, including :guilabel:`Auto`,
+and changes with it immediately — you do not need to reload. If you have set
+:guilabel:`Auto` and your operating system switches at sunset, so does the
+chat.
+
 Asking something
 ================
 
@@ -45,8 +89,36 @@ A turn is streamed as it happens, so you can watch it rather than wait for it:
 
 How many times it may go round is capped by :confval:`maxIterations`.
 
+While a turn is running, the status line under the transcript moves. That is
+deliberate: it is the difference between "still working" and "stuck", and it is
+often the only thing on screen while a tool runs. If you have asked your system
+for reduced motion, it is a plain line of text that says the same thing.
+
+Sending is closed while a turn is running and while a decision is outstanding,
+and the composer says which. Press the stop button to cancel.
+
 If you close the tab, the turn is cancelled. You do not keep paying for an
 answer nobody is reading.
+
+Keyboard
+========
+
+..  list-table::
+    :header-rows: 1
+    :widths: 30 70
+
+    *   - Key
+        - Does
+    *   - :kbd:`Enter`
+        - Sends the message.
+    *   - :kbd:`Shift` + :kbd:`Enter`
+        - Starts a new line.
+    *   - :kbd:`Backspace` in an empty box
+        - Removes the last attachment.
+    *   - :kbd:`Esc`
+        - Closes the panel (or the dialog on top of it).
+    *   - :kbd:`Ctrl`/:kbd:`Cmd` + :kbd:`V`
+        - Pastes a file from the clipboard as an attachment.
 
 Reading, and changing
 =====================

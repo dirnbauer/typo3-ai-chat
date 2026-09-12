@@ -29,7 +29,10 @@ user, through nr-llm's agent runtime — with human approval for every write.
 - **The legacy frontend is removed**: the Lit chat UI, the vendored
   `marked`/`DOMPurify` import-map entries, the assistant-ui operator bundle and
   their Jest/Playwright suites. The 2.0 UI is a React/shadcn bundle mounting
-  `<wc-ai-chat>` in a Shadow DOM.
+  `<wc-ai-chat>` in a Shadow DOM, built with Vite and committed to
+  `Resources/Public/JavaScript/Dist/app.js`. `Configuration/JavaScriptModules.php`
+  publishes one import specifier and no libraries, so an extension that relied
+  on this one to provide `marked` or `dompurify` must bundle its own.
 - **`webconsulting-ai-chat:migrate-nr-mcp-agent` is removed. Data migration
   from `nr_mcp_agent` is only available in the 1.x line.** A site still holding
   nr-mcp-agent data must run that migration on 1.x *before* upgrading to 2.0.0.
@@ -42,6 +45,12 @@ user, through nr-llm's agent runtime — with human approval for every write.
 
 ### Added
 
+- A React/shadcn interface in a Shadow DOM, as two surfaces from one bundle: a
+  resizable toolbar panel that survives module navigation, and a three-column
+  module with a conversation list, the thread and an activity rail. Streaming
+  assistant messages, tool cards carrying the call's effect, an approval card
+  bound to the turn digest, markdown through `rehype-sanitize`, and the
+  backend's light/dark setting mirrored onto the shadow host.
 - MCP tool projection into nr-llm (`nr_llm.tool_provider`): one tool per
   catalogue entry, named `typo3_<McpName>`, in the group `typo3_mcp`. Effect,
   data class and admin-only status are derived from the tool's own MCP
