@@ -43,13 +43,13 @@ export default defineConfig({
       formats: ['es'],
       fileName: () => 'app.js',
     },
-    // One file: a split chunk would be a second URL the import map does not
-    // publish, so it could never be fetched.
-    codeSplitting: false,
     rollupOptions: {
       // Nothing is external. See above.
       external: [],
       output: {
+        // One file: a split chunk would be a second URL the import map does
+        // not publish, so it could never be fetched.
+        codeSplitting: false,
         entryFileNames: 'app.js',
         // A chunk name that never gets used, so a stray split fails loudly
         // instead of quietly publishing a second file the import map cannot
