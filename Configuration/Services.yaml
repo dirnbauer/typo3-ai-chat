@@ -25,6 +25,17 @@ services:
     arguments:
       $identifier: 'webconsulting_ai_chat_tools'
 
+  # The MCP catalogue projection into nr-llm's agent runtime. Tagged
+  # explicitly rather than by autoconfiguration: nr-llm's ToolProviderInterface
+  # carries an #[AutoconfigureTag], and letting both apply would register the
+  # provider twice — every tool would then collide with itself and be dropped.
+  Webconsulting\Typo3AiChat\Tool\McpCatalogToolProvider:
+    autoconfigure: false
+    arguments:
+      $cache: '@cache.webconsulting_ai_chat_tools'
+    tags:
+      - name: 'nr_llm.tool_provider'
+
   # Document extractors — tagged for DocumentExtractorRegistry
   Webconsulting\Typo3AiChat\Document\DocumentExtractorRegistry:
     arguments:
