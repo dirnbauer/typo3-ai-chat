@@ -39,8 +39,7 @@ final class ServerSentEventStreamTest extends TestCase
     /**
      * A literal newline in the data would end the frame, so every line carries
      * its own `data:` prefix and the client rejoins them.
-     */
-    /**
+     *
      * In practice JSON escaping means a payload never contains a raw newline,
      * so this rule never fires in production — which is why it is tested
      * directly rather than through a payload that cannot trigger it.
@@ -175,7 +174,11 @@ final class ServerSentEventStreamTest extends TestCase
     {
         $stream = new ServerSentEventStream(static function (TurnEventSink $sink): void {});
 
-        self::assertInstanceOf(SelfEmittableStreamInterface::class, $stream);
+        self::assertContains(
+            SelfEmittableStreamInterface::class,
+            class_implements($stream) ?: [],
+            'Only a self-emittable body can write while the turn is still running.',
+        );
         self::assertFalse($stream->isSeekable());
         self::assertFalse($stream->isReadable());
         self::assertFalse($stream->isWritable());

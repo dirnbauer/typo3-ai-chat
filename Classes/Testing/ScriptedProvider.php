@@ -208,11 +208,29 @@ final class ScriptedProvider extends AbstractProvider implements ToolCapableInte
             $id = is_string($call['id'] ?? null) && $call['id'] !== ''
                 ? $call['id']
                 : 'call-' . ($index + 1);
-            $arguments = is_array($call['arguments'] ?? null) ? $call['arguments'] : [];
-
-            $calls[] = ToolCall::function($id, $name, $arguments);
+            $calls[] = ToolCall::function($id, $name, $this->arguments($call));
         }
 
         return $calls === [] ? null : $calls;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function arguments(mixed $call): array
+    {
+        $raw = is_array($call) ? ($call['arguments'] ?? null) : null;
+        if (!is_array($raw)) {
+            return [];
+        }
+
+        $arguments = [];
+        foreach ($raw as $key => $value) {
+            if (is_string($key)) {
+                $arguments[$key] = $value;
+            }
+        }
+
+        return $arguments;
     }
 }

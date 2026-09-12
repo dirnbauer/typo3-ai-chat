@@ -9,6 +9,12 @@ parameters:
         - Classes
         - Configuration
         - Tests
+    excludePaths:
+        analyseAndScan:
+            # Bootstrap scripts and fixture generators: they run before TYPO3
+            # defines the constants they use, and they are not shipped code.
+            - Tests/Build/*
+            - Tests/Fixtures/Documents/generate.php
     treatPhpDocTypesAsCertain: false
     # phpoffice/phpspreadsheet is a SUGGESTED dependency, so the XlsxExtractor
     # ignores below match only when it is absent. Reporting the unmatched ones

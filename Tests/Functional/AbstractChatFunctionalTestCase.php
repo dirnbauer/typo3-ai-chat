@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Webconsulting\Typo3AiChat\Tests\Functional;
 
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
+use TYPO3\CMS\Core\Cache\CacheManager;
 use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\TestingFramework\Core\Functional\FunctionalTestCase;
 use Webconsulting\Typo3AiChat\Testing\ScriptedProvider;
@@ -76,6 +77,11 @@ abstract class AbstractChatFunctionalTestCase extends FunctionalTestCase
             Environment::getContext()->isTesting(),
             'The scripted provider is only registered outside production, so the suite must run in a testing context.',
         );
+
+        // The rate limiter keeps its window in TYPO3's caching framework, which
+        // is NOT part of the per-test database reset. Without this, the eleventh
+        // turn of one test is the first refusal of the next.
+        $this->get(CacheManager::class)->getCache('ratelimiter')->flush();
 
         $this->importCSVDataSet(__DIR__ . '/Fixtures/be_users.csv');
         $this->importCSVDataSet(__DIR__ . '/Fixtures/tx_nrllm_provider.csv');

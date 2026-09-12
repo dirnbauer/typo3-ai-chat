@@ -93,7 +93,10 @@ final readonly class ApprovalService
 
         $emit('run.started', ['runUuid' => $runUuid, 'userMessageUid' => 0]);
 
+        $resumedCalls = TurnPersister::resumedCalls($conversation->getPendingApproval());
+
         $recorder = new TurnStepRecorder($this->effectLookup);
+        $recorder->seedOpenCalls($resumedCalls);
         $onStep = static function (RunStep $step) use ($recorder, $emit): void {
             $recorder->record($step);
             foreach ($recorder->drainEvents() as [$name, $payload]) {
@@ -137,7 +140,7 @@ final readonly class ApprovalService
 
         $recorder->recordAll($result->steps);
 
-        return $this->turnService->settle($conversation, $result, $recorder, $emit);
+        return $this->turnService->settle($conversation, $result, $recorder, $emit, $resumedCalls);
     }
 
     /**

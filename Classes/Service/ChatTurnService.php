@@ -131,18 +131,21 @@ final readonly class ChatTurnService
      * conversation into the state the outcome demands.
      *
      * @param (Closure(string, array<string, mixed>): void)|null $emit
+     * @param list<array{id: string, name: string}>              $resumedCalls calls requested
+     *                                                                         before this segment
      */
     public function settle(
         Conversation $conversation,
         AgentRunResult $result,
         TurnStepRecorder $recorder,
         ?Closure $emit = null,
+        array $resumedCalls = [],
     ): TurnResult {
         $emit = self::emitter($emit);
         $runUuid = $result->runUuid !== '' ? $result->runUuid : $conversation->getRunUuid();
         $outcome = $this->outcomeMapper->map($result);
 
-        $persisted = $this->persister->persistSteps($conversation, $recorder->steps(), $runUuid);
+        $persisted = $this->persister->persistSteps($conversation, $recorder->steps(), $runUuid, $resumedCalls);
         foreach ($persisted as $message) {
             if ($message->role === MessageRole::Assistant && $message->toolCalls === []) {
                 $emit('message.final', ['messageUid' => $message->uid, 'content' => $message->content]);

@@ -14,6 +14,7 @@ use Webconsulting\Typo3AiChat\Enum\ConversationStatus;
 use Webconsulting\Typo3AiChat\Enum\MessageRole;
 use Webconsulting\Typo3AiChat\Testing\ScriptedProvider;
 use Webconsulting\Typo3AiChat\Tests\Functional\AbstractChatFunctionalTestCase;
+use Webconsulting\Typo3AiChat\Tests\Functional\DecodesApiResponses;
 
 /**
  * A whole turn, from the HTTP body to the persisted rows.
@@ -25,6 +26,8 @@ use Webconsulting\Typo3AiChat\Tests\Functional\AbstractChatFunctionalTestCase;
  */
 final class ChatTurnTest extends AbstractChatFunctionalTestCase
 {
+    use DecodesApiResponses;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -39,7 +42,7 @@ final class ChatTurnTest extends AbstractChatFunctionalTestCase
             ['content' => 'TYPO3 is a content management system.'],
         ]);
 
-        $body = $this->decode($this->turn('What is TYPO3?'));
+        $body = $this->decodeJson($this->turn('What is TYPO3?'));
 
         self::assertSame('completed', $body['outcome']);
         self::assertSame(ConversationStatus::Idle->value, $body['status']);
@@ -60,22 +63,22 @@ final class ChatTurnTest extends AbstractChatFunctionalTestCase
             ['content' => 'That page does not exist yet.'],
         ]);
 
-        $body = $this->decode($this->turn('What is on page 1?'));
+        $body = $this->decodeJson($this->turn('What is on page 1?'));
 
         self::assertSame('completed', $body['outcome']);
 
-        $events = array_column($body['events'], 'event');
+        $events = $this->eventNames($body);
         self::assertContains('run.started', $events);
         self::assertContains('step.tool.call', $events);
         self::assertContains('step.tool.result', $events);
         self::assertContains('message.final', $events);
         self::assertContains('run.finished', $events);
 
-        $call = $this->event($body['events'], 'step.tool.call');
+        $call = $this->eventPayload($body, 'step.tool.call');
         self::assertSame('typo3_GetPage', $call['name']);
         self::assertSame('read_only', $call['effect'], 'The client needs to know a read is a read.');
 
-        $result = $this->event($body['events'], 'step.tool.result');
+        $result = $this->eventPayload($body, 'step.tool.result');
         self::assertSame('call-1', $result['callId'], 'A result must be attributable to the call it answers.');
         self::assertArrayHasKey('preview', $result);
     }
@@ -165,34 +168,6 @@ final class ChatTurnTest extends AbstractChatFunctionalTestCase
         self::assertInstanceOf(ChatApiController::class, $controller);
 
         return $controller->turn($request);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function decode(ResponseInterface $response): array
-    {
-        self::assertSame(200, $response->getStatusCode(), (string)$response->getBody());
-        $decoded = json_decode((string)$response->getBody(), true);
-        self::assertIsArray($decoded);
-
-        return $decoded;
-    }
-
-    /**
-     * @param list<array{event: string, data: array<string, mixed>}> $events
-     *
-     * @return array<string, mixed>
-     */
-    private function event(array $events, string $name): array
-    {
-        foreach ($events as $event) {
-            if ($event['event'] === $name) {
-                return $event['data'];
-            }
-        }
-
-        self::fail(sprintf('No "%s" event was emitted.', $name));
     }
 
     /**

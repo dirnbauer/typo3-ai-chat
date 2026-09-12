@@ -50,7 +50,7 @@ final class XlsxExtractor implements DocumentExtractorInterface
                     foreach ($cellIterator as $cell) {
                         $value = $cell->getValue();
                         if ($value !== null && $value !== '') {
-                            $cells[] = (string) $value;
+                            $cells[] = (string)$value;
                         }
                     }
                     if ($cells !== []) {

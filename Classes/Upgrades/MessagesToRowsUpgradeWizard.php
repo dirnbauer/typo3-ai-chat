@@ -275,18 +275,37 @@ final readonly class MessagesToRowsUpgradeWizard implements UpgradeWizardInterfa
     }
 
     /**
+     * The target columns are `json`, so Doctrine encodes what it is given.
+     * Handing it a string it has already been asked to encode produces a JSON
+     * document containing a JSON document, and every migrated tool call decodes
+     * back to a string where the transcript expects a list.
+     *
      * @param array<string, mixed> $message
+     *
+     * @return list<array<string, mixed>>|null
      */
-    private function jsonColumn(array $message, string $key): ?string
+    private function jsonColumn(array $message, string $key): ?array
     {
         $value = $message[$key] ?? null;
         if (!is_array($value) || $value === []) {
             return null;
         }
 
-        $json = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        $entries = [];
+        foreach ($value as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+            $normalised = [];
+            foreach ($entry as $entryKey => $entryValue) {
+                if (is_string($entryKey)) {
+                    $normalised[$entryKey] = $entryValue;
+                }
+            }
+            $entries[] = $normalised;
+        }
 
-        return is_string($json) ? $json : null;
+        return $entries === [] ? null : $entries;
     }
 
     /**

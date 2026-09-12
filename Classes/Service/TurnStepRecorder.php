@@ -45,6 +45,26 @@ final class TurnStepRecorder
         private readonly ?ToolEffectLookup $effectLookup = null,
     ) {}
 
+    /**
+     * Adopt calls that were requested in an EARLIER segment of the same run.
+     *
+     * A run resumed after an approval starts a fresh step list: the assistant
+     * turn that asked for the calls is in the previous segment, so nothing in
+     * this one says which call a tool step answers. Without the seed every
+     * approved or denied result would arrive with an empty call id, and the
+     * client could not attach it to the card the user just decided.
+     *
+     * @param list<array{id: string, name: string}> $calls
+     */
+    public function seedOpenCalls(array $calls): void
+    {
+        foreach ($calls as $call) {
+            if ($call['name'] !== '') {
+                $this->openCalls[] = $call;
+            }
+        }
+    }
+
     public function record(RunStep $step): void
     {
         $id = spl_object_id($step);

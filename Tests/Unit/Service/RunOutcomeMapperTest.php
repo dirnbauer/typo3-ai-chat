@@ -10,6 +10,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use Throwable;
 use Webconsulting\Typo3AiChat\Enum\ConversationStatus;
 use Webconsulting\Typo3AiChat\Service\RunOutcomeMapper;
 
@@ -136,7 +137,7 @@ final class RunOutcomeMapperTest extends TestCase
         self::assertSame('The turn failed.', $mapped->message);
     }
 
-    private function resultFor(AgentRunOutcome $outcome, ?\Throwable $error = null): AgentRunResult
+    private function resultFor(AgentRunOutcome $outcome, ?Throwable $error = null): AgentRunResult
     {
         return new AgentRunResult(
             outcome: $outcome,

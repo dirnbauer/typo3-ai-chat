@@ -77,14 +77,27 @@ final readonly class TurnPersister
      * round the loop executes the requested calls in the order they were asked
      * for, so a per-name queue reunites them.
      *
-     * @param list<RunStep> $steps
+     * @param list<RunStep>                         $steps
+     * @param list<array{id: string, name: string}> $resumedCalls calls requested in an
+     *                                                            EARLIER segment of the
+     *                                                            same run
      *
      * @return list<Message>
      */
-    public function persistSteps(Conversation $conversation, array $steps, string $runUuid): array
-    {
+    public function persistSteps(
+        Conversation $conversation,
+        array $steps,
+        string $runUuid,
+        array $resumedCalls = [],
+    ): array {
+        // A run resumed after an approval starts a fresh step list, so the
+        // assistant turn that asked for these calls is in the PREVIOUS segment.
+        // Without seeding them the approved (or denied) tool turns would have no
+        // call to answer and be dropped — leaving a transcript whose assistant
+        // tool-call message has no reply, which the next turn's provider
+        // rejects outright.
         /** @var list<array{id: string, name: string}> $openCalls */
-        $openCalls = [];
+        $openCalls = $resumedCalls;
         $persisted = [];
 
         foreach ($steps as $step) {
@@ -170,6 +183,36 @@ final readonly class TurnPersister
         }
 
         return $persisted;
+    }
+
+    /**
+     * The calls named by a stored approval card, in the shape the persister and
+     * the recorder correlate against.
+     *
+     * @param array<string, mixed> $pendingApproval
+     *
+     * @return list<array{id: string, name: string}>
+     */
+    public static function resumedCalls(array $pendingApproval): array
+    {
+        $raw = $pendingApproval['calls'] ?? null;
+        if (!is_array($raw)) {
+            return [];
+        }
+
+        $calls = [];
+        foreach ($raw as $call) {
+            if (!is_array($call)) {
+                continue;
+            }
+            $name = is_string($call['name'] ?? null) ? $call['name'] : '';
+            $id = is_string($call['callId'] ?? null) ? $call['callId'] : '';
+            if ($name !== '' && $id !== '') {
+                $calls[] = ['id' => $id, 'name' => $name];
+            }
+        }
+
+        return $calls;
     }
 
     /**

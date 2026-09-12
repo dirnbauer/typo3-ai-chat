@@ -126,7 +126,7 @@ final class ExtensionConfigurationTest extends TestCase
      */
     private function configWith(array $values): ExtensionConfiguration
     {
-        $typo3Config = $this->createStub(Typo3ExtensionConfiguration::class);
+        $typo3Config = self::createStub(Typo3ExtensionConfiguration::class);
         $typo3Config->method('get')->willReturn($values);
         GeneralUtility::addInstance(Typo3ExtensionConfiguration::class, $typo3Config);
 

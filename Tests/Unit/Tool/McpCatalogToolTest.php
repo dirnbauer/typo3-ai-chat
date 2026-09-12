@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Webconsulting\Typo3AiChat\Tests\Unit\Tool;
 
-use Hn\McpServer\MCP\ToolRegistry;
 use Hn\McpServer\MCP\Tool\ToolInterface as McpToolInterface;
+use Hn\McpServer\MCP\ToolRegistry;
 use Hn\McpServer\Service\CapabilityManifestService;
 use Hn\McpServer\Service\McpToolCatalogService;
 use Hn\McpServer\Service\ToolResultNormalizer;
@@ -78,8 +78,8 @@ final class McpCatalogToolTest extends TestCase
         ], 6));
 
         GeneralUtility::addInstance(CapabilityManifestService::class, new CapabilityManifestService(
-            $this->createStub(ExtensionConfiguration::class),
-            $this->createStub(SiteFinder::class),
+            self::createStub(ExtensionConfiguration::class),
+            self::createStub(SiteFinder::class),
             null,
             $path,
         ));
@@ -168,7 +168,9 @@ final class McpCatalogToolTest extends TestCase
 
         self::assertCount(1, $result->artifacts);
         self::assertSame(ArtifactType::TEXT, $result->artifacts[0]->type);
-        self::assertStringContainsString('"nested"', (string)$result->artifacts[0]->data['text']);
+        $text = $result->artifacts[0]->data['text'] ?? null;
+        self::assertIsString($text);
+        self::assertStringContainsString('"nested"', $text);
     }
 
     /**
@@ -267,7 +269,7 @@ final class McpCatalogToolTest extends TestCase
      */
     private function catalogReturning(CallToolResult $result): McpToolCatalogService
     {
-        $tool = new class($result) implements McpToolInterface {
+        $tool = new class ($result) implements McpToolInterface {
             public function __construct(private readonly CallToolResult $result) {}
 
             public function getName(): string

@@ -24,6 +24,8 @@ use Webconsulting\Typo3AiChat\Tool\ToolEffectClassifier;
  */
 final class ToolEffectClassifierTest extends TestCase
 {
+    /** @var list<string> */
+    private array $manifestFiles = [];
     /**
      * @param array<string, mixed> $annotations
      */
@@ -207,15 +209,12 @@ final class ToolEffectClassifierTest extends TestCase
         ], 6));
 
         return new CapabilityManifestService(
-            $this->createStub(ExtensionConfiguration::class),
-            $this->createStub(SiteFinder::class),
+            self::createStub(ExtensionConfiguration::class),
+            self::createStub(SiteFinder::class),
             null,
             $path,
         );
     }
-
-    /** @var list<string> */
-    private array $manifestFiles = [];
 
     protected function tearDown(): void
     {

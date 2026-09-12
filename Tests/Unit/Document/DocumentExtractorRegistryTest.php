@@ -20,7 +20,7 @@ class DocumentExtractorRegistryTest extends TestCase
     {
         // A stub, not a mock: the registry is what is under test, and these
         // extractors only have to answer questions.
-        $mock = $this->createStub(DocumentExtractorInterface::class);
+        $mock = self::createStub(DocumentExtractorInterface::class);
         $mock->method('getSupportedMimeTypes')->willReturn($mimes);
         $mock->method('getSupportedFileExtensions')->willReturn($extensions);
         $mock->method('isAvailable')->willReturn($available);
@@ -112,7 +112,7 @@ class DocumentExtractorRegistryTest extends TestCase
         $extractor = $this->createMock(DocumentExtractorInterface::class);
         $extractor->method('getSupportedMimeTypes')->willReturn(['text/plain']);
         $extractor->method('isAvailable')->willReturn(true);
-        $extractor->expects(self::once())->method('validate')->with('/path.txt');
+        $extractor->expects($this->once())->method('validate')->with('/path.txt');
 
         $registry = new DocumentExtractorRegistry([$extractor]);
         $registry->validate('/path.txt', 'text/plain');

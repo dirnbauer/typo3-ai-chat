@@ -125,7 +125,7 @@ final class ToolAccessServiceTest extends TestCase
         array $userGroups = [1],
         bool $admin = false,
     ): ToolAccessService {
-        $availability = new class($enabled) implements ToolAvailabilityServiceInterface {
+        $availability = new class ($enabled) implements ToolAvailabilityServiceInterface {
             /** @param list<string> $enabled */
             public function __construct(private readonly array $enabled) {}
 
@@ -150,13 +150,16 @@ final class ToolAccessServiceTest extends TestCase
             }
         };
 
-        $user = new class($toolsTsConfig) extends BackendUserAuthentication {
+        $user = new class ($toolsTsConfig) extends BackendUserAuthentication {
             /** @param array<string, mixed> $toolsTsConfig */
             public function __construct(private readonly array $toolsTsConfig)
             {
                 parent::__construct();
             }
 
+            /**
+             * @return array<string, mixed>
+             */
             public function getTSConfig(): array
             {
                 return $this->toolsTsConfig === []
@@ -168,7 +171,7 @@ final class ToolAccessServiceTest extends TestCase
         $user->userGroupsUID = $userGroups;
         $GLOBALS['BE_USER'] = $user;
 
-        $typo3Config = $this->createStub(Typo3ExtensionConfiguration::class);
+        $typo3Config = self::createStub(Typo3ExtensionConfiguration::class);
         $typo3Config->method('get')->willReturn(['allowedGroups' => $allowedGroups]);
         GeneralUtility::addInstance(Typo3ExtensionConfiguration::class, $typo3Config);
 
