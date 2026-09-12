@@ -4,16 +4,18 @@ includes:
     - .Build/vendor/phpstan/phpstan-phpunit/rules.neon
 
 parameters:
-    level: 8
+    level: 10
     paths:
         - Classes
         - Configuration
         - Tests
     treatPhpDocTypesAsCertain: false
+    # phpoffice/phpspreadsheet is a SUGGESTED dependency, so the XlsxExtractor
+    # ignores below match only when it is absent. Reporting the unmatched ones
+    # would make the analysis fail on whichever of the two installs it is run
+    # against — which is the opposite of what an optional dependency means.
+    reportUnmatchedIgnoredErrors: false
     ignoreErrors:
-        # phpoffice/phpspreadsheet is an optional suggested dependency (not required).
-        # XlsxExtractor guards every usage behind isAvailable(), but PHPStan cannot
-        # resolve the classes when the package is absent.
         -
             identifier: class.notFound
             path: Classes/Document/Extractor/XlsxExtractor.php
@@ -29,3 +31,16 @@ parameters:
         -
             identifier: argument.type
             path: Classes/Document/Extractor/XlsxExtractor.php
+
+        # RunOutcomeMapper matches every AgentRunOutcome case AND keeps a default
+        # arm. Against today's enum the last explicit arm makes the default
+        # unreachable, and PHPStan is right to say so — but nr-llm states
+        # outright that outcomes may be added in a minor release, and the default
+        # arm is what turns that from a crash into a sanitized failure. The
+        # redundancy is the feature.
+        -
+            identifier: match.alwaysTrue
+            path: Classes/Service/RunOutcomeMapper.php
+        -
+            identifier: match.unreachable
+            path: Classes/Service/RunOutcomeMapper.php

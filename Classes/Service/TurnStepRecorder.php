@@ -93,16 +93,20 @@ final class TurnStepRecorder
      */
     public function correlate(string $toolName): string
     {
-        foreach ($this->openCalls as $index => $call) {
-            if ($call['name'] === $toolName) {
-                unset($this->openCalls[$index]);
-                $this->openCalls = array_values($this->openCalls);
-
-                return $call['id'];
+        $remaining = [];
+        $matched = '';
+        $consumed = false;
+        foreach ($this->openCalls as $call) {
+            if (!$consumed && $call['name'] === $toolName) {
+                $matched = $call['id'];
+                $consumed = true;
+                continue;
             }
+            $remaining[] = $call;
         }
+        $this->openCalls = $remaining;
 
-        return '';
+        return $matched;
     }
 
     private function emitFor(RunStep $step): void

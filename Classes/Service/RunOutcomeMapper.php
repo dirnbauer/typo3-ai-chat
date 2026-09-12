@@ -28,6 +28,11 @@ final readonly class RunOutcomeMapper
 {
     public function map(AgentRunResult $result): TurnOutcome
     {
+        // Captured before the match: inside the default arm the enum has been
+        // narrowed to "none of the known cases", and reading the value there
+        // would be reading a type that today's analysis says cannot exist.
+        $rawOutcome = $result->outcome->value;
+
         return match ($result->outcome) {
             AgentRunOutcome::COMPLETED => new TurnOutcome(
                 status: ConversationStatus::Idle,
@@ -117,7 +122,7 @@ final readonly class RunOutcomeMapper
                 outcome: 'failed',
                 message: $this->reason(
                     $result,
-                    sprintf('The run ended with an outcome this version does not handle (%s).', $result->outcome->value),
+                    sprintf('The run ended with an outcome this version does not handle (%s).', $rawOutcome),
                 ),
             ),
         };

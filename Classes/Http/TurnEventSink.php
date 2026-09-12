@@ -117,6 +117,7 @@ final class TurnEventSink
     public function emitter(): Closure
     {
         return function (string $name, array $payload): void {
+            /** @var array<string, mixed> $payload */
             $this->pingIfDue();
             $this->emit($name, $payload);
         };

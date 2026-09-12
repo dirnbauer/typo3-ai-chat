@@ -90,7 +90,7 @@ final readonly class ChatApiController
                 . 'configuration and set its UID as "llmTaskUid" in the extension configuration.';
         }
 
-        $allowedTools = $this->toolAccess->allowedToolNames() ?? [];
+        $allowedTools = $this->toolAccess->allowedToolNames();
         if ($available && $allowedTools === []) {
             $issues[] = 'No tools are enabled for you. The chat can answer questions but cannot inspect or change '
                 . 'this installation.';
@@ -111,7 +111,7 @@ final readonly class ChatApiController
             'tools' => $this->describeTools($allowedTools),
             'budget' => [
                 'allowed' => $budget->allowed,
-                'reason' => $budget->reason ?? '',
+                'reason' => $budget->reason,
             ],
             'limits' => [
                 'maxMessageLength' => $this->config->getMaxMessageLength(),

@@ -40,13 +40,17 @@ final readonly class ToolAccessService
     ) {}
 
     /**
-     * The tool names this user may have offered, or null when nothing narrows
-     * nr-llm's own set — which nr-llm reads as "offer the globally enabled
-     * set".
+     * The tool names this user may have offered.
      *
-     * @return list<string>|null
+     * Always an explicit list, never nr-llm's "null means the global set"
+     * shorthand: the status endpoint has to show the user which tools this
+     * conversation can reach, and it cannot render a shorthand. Starting from
+     * the global set and narrowing it gives the same answer with a name
+     * attached to every entry.
+     *
+     * @return list<string>
      */
-    public function allowedToolNames(): ?array
+    public function allowedToolNames(): array
     {
         if (!$this->backendUser->mayUseChat($this->config->getAllowedGroupIds())) {
             return [];
@@ -83,7 +87,7 @@ final readonly class ToolAccessService
     public function allowedMcpToolNames(): array
     {
         $names = [];
-        foreach ($this->allowedToolNames() ?? [] as $toolName) {
+        foreach ($this->allowedToolNames() as $toolName) {
             $mcpName = McpCatalogTool::mcpName($toolName);
             if ($mcpName !== null) {
                 $names[] = $mcpName;
@@ -104,8 +108,13 @@ final readonly class ToolAccessService
         }
 
         $tsConfig = $user->getTSConfig();
-        $allowRaw = $tsConfig[self::TSCONFIG_PATH . 'tools.']['allow'] ?? null;
-        $denyRaw = $tsConfig[self::TSCONFIG_PATH . 'tools.']['deny'] ?? null;
+        $tools = $tsConfig[self::TSCONFIG_PATH . 'tools.'] ?? null;
+        if (!is_array($tools)) {
+            return [null, []];
+        }
+
+        $allowRaw = $tools['allow'] ?? null;
+        $denyRaw = $tools['deny'] ?? null;
 
         // An ABSENT allow list and an EMPTY one are different answers: absent
         // means "do not narrow", empty means "allow nothing". Collapsing them

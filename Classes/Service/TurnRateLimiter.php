@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Webconsulting\Typo3AiChat\Service;
 
 use Symfony\Component\RateLimiter\RateLimiterFactory;
-use Symfony\Component\RateLimiter\Storage\StorageInterface;
 use TYPO3\CMS\Core\RateLimiter\Storage\CachingFrameworkStorage;
 use Webconsulting\Typo3AiChat\Configuration\ExtensionConfiguration;
 
@@ -76,9 +75,6 @@ final class TurnRateLimiter
             return $this->factory;
         }
 
-        /** @var StorageInterface $storage */
-        $storage = $this->storage;
-
         // A sliding window rather than a fixed one: a fixed window lets a user
         // spend the whole allowance at 11:59:59 and the whole next allowance at
         // 12:00:00, which is exactly twice the limit at the moment it matters.
@@ -89,7 +85,7 @@ final class TurnRateLimiter
                 'limit' => $limit,
                 'interval' => '1 minute',
             ],
-            $storage,
+            $this->storage,
         );
 
         return $this->factory;
