@@ -5,22 +5,60 @@ on:
     tags:
       - 'v*'
 
-permissions: {}
+permissions:
+  contents: read
 
 jobs:
   release:
-    uses: netresearch/typo3-ci-workflows/.github/workflows/release-typo3-extension.yml@main
+    name: Publish a GitHub release
+    runs-on: ubuntu-latest
     permissions:
       contents: write
-      id-token: write
-      attestations: write
-    with:
-      archive-prefix: typo3-ai-chat
-      package-name: webconsulting/typo3-ai-chat
-      extension-key: webconsulting_ai_chat
-      # The extension is not published anywhere yet: no TER token in this
-      # repo, not on Packagist (consumers use a VCS repository entry), not
-      # registered on docs.typo3.org. Remove these as each channel is set up.
-      skip-ter: true
-      skip-packagist: true
-      skip-docs: true
+    env:
+      COMPOSER_AUTH: '{"github-oauth":{"github.com":"${{ github.token }}"}}'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+
+      # The extension is TER-published, so ext_emconf.php carries a version
+      # that a human maintains by hand — and a hand-maintained version drifts.
+      # Checking it against the tag here is the last moment the mismatch is
+      # still cheap to fix.
+      - name: Tag and ext_emconf.php agree
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          EMCONF=$(sed -nE "s/.*'version'[[:space:]]*=>[[:space:]]*'([^']+)'.*/\1/p" ext_emconf.php)
+          if [ "${TAG}" != "${EMCONF}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match ext_emconf.php version ${EMCONF}." >&2
+            exit 1
+          fi
+          echo "Releasing ${TAG}."
+
+      - name: composer.json is valid
+        run: composer validate --strict
+
+      - name: Release notes
+        id: notes
+        run: |
+          {
+            echo 'body<<RELEASE_NOTES'
+            awk -v tag="${GITHUB_REF_NAME#v}" '
+              $0 ~ "^## \\[" tag "\\]" { found = 1; next }
+              found && /^## \[/ { exit }
+              found { print }
+            ' CHANGELOG.md
+            echo 'RELEASE_NOTES'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${GITHUB_REF_NAME}" \
+            --notes "${{ steps.notes.outputs.body }}"
