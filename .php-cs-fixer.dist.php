@@ -2,15 +2,11 @@
 
 declare(strict_types=1);
 
-$finder = (new PhpCsFixer\Finder())
-    ->in(__DIR__ . '/Classes')
-    ->in(__DIR__ . '/Configuration')
-    ->in(__DIR__ . '/Tests');
+$config = TYPO3\CodingStandards\CsFixerConfig::create();
 
-return (new PhpCsFixer\Config())
+$config
     ->setRiskyAllowed(true)
-    ->setRules([
-        '@PER-CS2.0' => true,
+    ->setRules(array_merge($config->getRules(), [
         'declare_strict_types' => true,
         'no_unused_imports' => true,
         'ordered_imports' => ['sort_algorithm' => 'alpha'],
@@ -20,5 +16,10 @@ return (new PhpCsFixer\Config())
             'import_functions' => false,
             'import_constants' => false,
         ],
-    ])
-    ->setFinder($finder);
+    ]))
+    ->getFinder()
+    ->in(__DIR__ . '/Classes')
+    ->in(__DIR__ . '/Configuration')
+    ->in(__DIR__ . '/Tests');
+
+return $config;
