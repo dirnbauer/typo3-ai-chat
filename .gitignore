@@ -1,10 +1,13 @@
 .claude/
 .DS_Store
 node_modules/
-package-lock.json
 .Build/
 vendor/
 var/
+# package-lock.json IS committed: CI builds the bundle with `npm ci` and
+# asserts the result matches the committed Dist/app.js, which only means
+# something if every leg resolves the exact same dependency tree.
+
 # TYPO3 extensions (libraries) must not commit composer.lock — each consumer
 # and CI leg resolves dependencies for its own PHP/TYPO3 version.
 composer.lock

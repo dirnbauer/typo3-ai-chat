@@ -1,0 +1,421 @@
+@import 'tailwindcss' source(none);
+@import 'tw-animate-css';
+
+/*
+ * The scan set is pinned rather than discovered.
+ *
+ * Tailwind's automatic detection walks the whole repository, which here means
+ * PHP classes and Fluid templates full of words that look like utilities. CI
+ * asserts this bundle byte for byte, so "which files were scanned" must be a
+ * decision in this file rather than a consequence of what else happens to be
+ * checked out.
+ */
+@source '../**/*.{ts,tsx}';
+
+/*
+ * The chat's stylesheet, and the whole of it.
+ *
+ * It is adopted into a shadow root rather than linked, so nothing here can
+ * reach the backend and nothing the backend ships can reach in. That isolation
+ * is the point of ADR-016 and it has one cost: the chat inherits NOTHING,
+ * including the backend's light/dark mode. So every shadcn token below is
+ * defined here and pointed at the backend's own custom property, with a literal
+ * `light-dark()` fallback for the case where that property is absent — a test
+ * environment, or a backend release that renames one.
+ *
+ * Custom properties DO cross the shadow boundary (they are inherited), which is
+ * what makes the mapping work at all. `light-dark()` resolves against the
+ * element's own `color-scheme`, so mirroring the backend's scheme onto `:host`
+ * (see lib/theme.ts) is what makes both sides of every pair resolve the same
+ * way on both sides of the boundary.
+ */
+
+@custom-variant dark (&:where([data-scheme='dark'], [data-scheme='dark'] *));
+
+:host {
+  /* Mirrored from the backend by lib/theme.ts. `light dark` is the honest
+     default: it means "follow the OS", which is what TYPO3 itself defaults to. */
+  color-scheme: light dark;
+
+  /* --- surfaces --------------------------------------------------------- */
+  --background: var(--typo3-surface-container-low, light-dark(#f7f7f8, #16181c));
+  --foreground: var(--typo3-text-color-base, light-dark(#1a1a1a, #e8e9ea));
+
+  --card: var(--typo3-surface-container-lowest, light-dark(#ffffff, #101216));
+  --card-foreground: var(--foreground);
+
+  --popover: var(--typo3-surface-container-lowest, light-dark(#ffffff, #101216));
+  --popover-foreground: var(--foreground);
+
+  --muted: var(--typo3-surface-container-base, light-dark(#eeeef0, #1d2026));
+  --muted-foreground: color-mix(in srgb, var(--foreground), transparent 38%);
+
+  --accent: var(--typo3-surface-container-high, light-dark(#e4e5e8, #23262d));
+  --accent-foreground: var(--foreground);
+
+  --secondary: var(--typo3-surface-container-high, light-dark(#e4e5e8, #23262d));
+  --secondary-foreground: var(--foreground);
+
+  /* --- action colours --------------------------------------------------- */
+  --primary: var(--typo3-state-primary-bg, light-dark(#0a7bd1, #1f8ad9));
+  --primary-foreground: var(--typo3-state-primary-color, #ffffff);
+  --primary-hover: var(--typo3-state-primary-hover-bg, light-dark(#0967ae, #2f9ae9));
+
+  --destructive: var(--typo3-surface-danger, light-dark(#c83c3c, #a52f2f));
+  --destructive-foreground: var(--typo3-surface-danger-text, #ffffff);
+
+  --warning: var(--typo3-surface-warning, light-dark(#e8a33d, #7a5518));
+  --warning-foreground: var(--typo3-surface-warning-text, light-dark(#3a2a08, #ffffff));
+
+  --success: var(--typo3-surface-success, light-dark(#3a8f4f, #2c6d3c));
+  --success-foreground: var(--typo3-surface-success-text, #ffffff);
+
+  /* --- lines and focus -------------------------------------------------- */
+  --border: color-mix(in srgb, var(--foreground), transparent 86%);
+  --border-strong: color-mix(in srgb, var(--foreground), transparent 74%);
+  --input: color-mix(in srgb, var(--foreground), transparent 80%);
+  --ring: var(--typo3-state-primary-focus-border-color, light-dark(#0967ae, #56b1f0));
+
+  --radius: 0.5rem;
+
+  /* --- type ------------------------------------------------------------- */
+  --font-ui: var(--typo3-font-family-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif);
+  --font-code: var(--typo3-font-family-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace);
+
+  /* The backend sets 12px, which is right for a table of records and wrong for
+     a paragraph of model prose. Chrome stays at the backend's size; the reading
+     column gets 13.5px, which is the smallest step that stops a long answer
+     feeling like fine print. */
+  --text-chrome: 0.75rem;
+  --text-read: 0.84375rem;
+
+  /* The panel sits above the backend's own scaffold but below its modals: the
+     backend's modal must still be able to cover the chat. */
+  --z-panel: 40;
+
+  display: contents;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-code);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+}
+
+@layer base {
+  /*
+   * Preflight normalises `html` and `body`, neither of which exists inside a
+   * shadow root — so the equivalent has to be said again, here, about the one
+   * element that does.
+   */
+  .wc-root {
+    color: var(--foreground);
+    background: var(--background);
+    font-family: var(--font-ui);
+    font-size: var(--text-chrome);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wc-root *:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 1px;
+    border-radius: 2px;
+  }
+
+  /* A scrollbar that belongs to the chat rather than to the platform default,
+     because the chat is a narrow column and the platform default eats it. */
+  .wc-root ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  .wc-root ::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--foreground), transparent 80%);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+  }
+  .wc-root ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--foreground), transparent 60%);
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  .wc-root ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+/*
+ * The utilities the vendored registry components reach for.
+ *
+ * shadcn publishes these in its own `shadcn/tailwind.css`, which is not worth a
+ * dependency (and 300 transitive packages) for six rules — and the components
+ * are vendored anyway, so owning the utilities they name is the same decision
+ * as owning the components. The behaviour matches the registry's; the
+ * implementations are deliberately the simple ones.
+ */
+
+/* The signature: a live run says so by moving.
+ *
+ * A status row is the only thing on screen while a tool runs, and a static one
+ * is indistinguishable from a wedged one. The shimmer is the proof of life —
+ * small, slow, and switched off entirely for anyone who asked for less motion,
+ * who then still gets the row and its text. */
+@utility shimmer {
+  --shimmer-spread: calc(3ch + 40px);
+  --shimmer-base: var(--muted-foreground);
+  --shimmer-highlight: var(--foreground);
+
+  background-image: linear-gradient(
+    100deg,
+    var(--shimmer-base) calc(50% - var(--shimmer-spread)),
+    var(--shimmer-highlight) 50%,
+    var(--shimmer-base) calc(50% + var(--shimmer-spread))
+  );
+  background-repeat: no-repeat;
+  background-size: calc(200% + var(--shimmer-spread) * 2) 100%;
+  background-position: 100% 0;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: wc-shimmer 2.4s linear infinite;
+}
+
+@keyframes wc-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+
+/* A scroll container that fades out where there is more to see, so the edge of
+ * the viewport reads as "continues" rather than "ends". */
+@utility scroll-fade-b {
+  --wc-fade: 2.5rem;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - var(--wc-fade)), transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - var(--wc-fade)), transparent 100%);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+@utility scroll-fade-x {
+  --wc-fade: 1.5rem;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--wc-fade),
+    #000 calc(100% - var(--wc-fade)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--wc-fade),
+    #000 calc(100% - var(--wc-fade)),
+    transparent 100%
+  );
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+@utility scrollbar-gutter-stable {
+  scrollbar-gutter: stable;
+}
+
+/* A new row arriving in the thread, rather than appearing. */
+@utility wc-enter {
+  animation: wc-enter 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes wc-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/*
+ * The effect spine.
+ *
+ * Every tool card carries a rule down its leading edge, coloured by what the
+ * call will DO — not by how it went. It is the one piece of ornament in the
+ * whole surface that encodes something the reader needs: the consequence class
+ * the approval gate is about to act on.
+ */
+@utility effect-spine {
+  box-shadow: inset 2px 0 0 0 var(--spine, var(--border-strong));
+}
+
+@utility effect-read_only {
+  --spine: color-mix(in srgb, var(--foreground), transparent 65%);
+}
+
+@utility effect-idempotent_write {
+  --spine: var(--warning);
+}
+
+@utility effect-non_idempotent_write {
+  --spine: var(--destructive);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shimmer {
+    animation: none;
+    background-image: none;
+    -webkit-text-fill-color: currentColor;
+    color: var(--muted-foreground);
+  }
+
+  .wc-root,
+  .wc-root *,
+  .wc-root *::before,
+  .wc-root *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Markdown prose: a reading column, not a document. */
+@layer components {
+  .wc-prose {
+    font-size: var(--text-read);
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+  }
+  .wc-prose > * + * {
+    margin-top: 0.6em;
+  }
+  .wc-prose h1,
+  .wc-prose h2,
+  .wc-prose h3,
+  .wc-prose h4 {
+    font-weight: 600;
+    line-height: 1.3;
+    margin-top: 1.1em;
+  }
+  .wc-prose h1 {
+    font-size: 1.3em;
+  }
+  .wc-prose h2 {
+    font-size: 1.16em;
+  }
+  .wc-prose h3 {
+    font-size: 1.06em;
+  }
+  .wc-prose h4 {
+    font-size: 1em;
+  }
+  .wc-prose ul,
+  .wc-prose ol {
+    padding-inline-start: 1.35em;
+  }
+  .wc-prose ul {
+    list-style: disc;
+  }
+  .wc-prose ol {
+    list-style: decimal;
+  }
+  .wc-prose li + li {
+    margin-top: 0.25em;
+  }
+  .wc-prose a {
+    color: var(--primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .wc-prose code {
+    font-family: var(--font-code);
+    font-size: 0.92em;
+    background: var(--muted);
+    padding: 0.1em 0.35em;
+    border-radius: 3px;
+  }
+  .wc-prose pre {
+    background: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.7em 0.8em;
+    overflow-x: auto;
+  }
+  .wc-prose pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.9em;
+  }
+  .wc-prose blockquote {
+    border-inline-start: 2px solid var(--border-strong);
+    padding-inline-start: 0.8em;
+    color: var(--muted-foreground);
+  }
+  .wc-prose table {
+    display: block;
+    overflow-x: auto;
+    border-collapse: collapse;
+    font-size: 0.95em;
+  }
+  .wc-prose th,
+  .wc-prose td {
+    border: 1px solid var(--border);
+    padding: 0.3em 0.5em;
+    text-align: start;
+  }
+  .wc-prose th {
+    background: var(--muted);
+    font-weight: 600;
+  }
+  .wc-prose hr {
+    border: 0;
+    border-top: 1px solid var(--border);
+  }
+}
