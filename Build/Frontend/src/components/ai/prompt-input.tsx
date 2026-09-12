@@ -254,11 +254,16 @@ export function PromptInput({
   );
 }
 
-export type PromptInputBodyProps = HTMLAttributes<HTMLDivElement>;
-
-export function PromptInputBody({ className, ...props }: PromptInputBodyProps) {
-  return <div className={cn('contents', className)} {...props} />;
-}
+/*
+ * `PromptInputBody` is deliberately absent.
+ *
+ * Upstream wraps the composer's parts in a `display: contents` div. That
+ * removes the BOX but not the ELEMENT, and `InputGroup` decides its own layout
+ * with child combinators — `has-[>textarea]:h-auto`,
+ * `has-[>[data-align=block-end]]:flex-col`. With a wrapper in between, none of
+ * them match: the group stays 36px tall and horizontal, and the textarea is
+ * squashed to a line. So the parts are children of `PromptInput` directly.
+ */
 
 export type PromptInputTextareaProps = ComponentProps<typeof InputGroupTextarea>;
 

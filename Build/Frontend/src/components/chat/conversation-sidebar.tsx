@@ -118,15 +118,14 @@ export function ConversationSidebar({
                       {conversation.title || 'Untitled conversation'}
                     </span>
                   </span>
-                  <span className="mt-0.5 flex items-center gap-1.5 text-muted-foreground">
-                    <span>{formatTimestamp(conversation.lastMessageAt || conversation.createdAt)}</span>
-                    <span aria-hidden="true">·</span>
-                    <span>
-                      {conversation.messageCount} {conversation.messageCount === 1 ? 'message' : 'messages'}
+                  <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-muted-foreground">
+                    <span className="truncate whitespace-nowrap">
+                      {formatTimestamp(conversation.lastMessageAt || conversation.createdAt)} ·{' '}
+                      {conversation.messageCount}
                     </span>
                     <StatusBadge status={conversation.status} />
                     {conversation.archived ? (
-                      <Badge className="rounded-full px-1.5 font-normal" variant="outline">
+                      <Badge className="shrink-0 rounded-full px-1.5 font-normal" variant="outline">
                         Archived
                       </Badge>
                     ) : null}
@@ -274,7 +273,7 @@ function StatusBadge({ status }: { status: ConversationSummary['status'] }) {
 
   return (
     <Badge
-      className="rounded-full px-1.5 font-normal"
+      className="shrink-0 rounded-full px-1.5 font-normal whitespace-nowrap"
       variant={status === 'failed' ? 'destructive' : 'secondary'}
     >
       {label}

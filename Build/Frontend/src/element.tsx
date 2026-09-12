@@ -5,7 +5,8 @@ import { PanelSurface } from '@/components/chat/panel-surface';
 import { PortalContainerProvider } from '@/lib/portal';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { colorSchemeValue, observeScheme, type ColorScheme } from '@/lib/theme';
-import styles from '@/styles/tailwind.css?inline';
+import { shadowSafeCss } from '@/styles/shadow-css';
+import rawStyles from '@/styles/tailwind.css?inline';
 
 /**
  * `<wc-ai-chat>` — the whole of the chat's public surface.
@@ -31,6 +32,8 @@ import styles from '@/styles/tailwind.css?inline';
  * browser keeps one copy. Building a sheet per element would also mean one
  * re-parse per element on every theme change.
  */
+const styles = shadowSafeCss(rawStyles);
+
 let sheet: CSSStyleSheet | null = null;
 
 function styleSheet(): CSSStyleSheet | null {

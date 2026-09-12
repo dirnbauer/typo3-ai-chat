@@ -3,7 +3,6 @@ import { InfoIcon } from 'lucide-react';
 import {
   PromptInput,
   PromptInputAttachButton,
-  PromptInputBody,
   PromptInputFooter,
   PromptInputHeader,
   PromptInputSubmit,
@@ -66,8 +65,14 @@ export function Composer({
 
   return (
     <div className="border-t bg-background px-3 py-2.5">
+      {/*
+        Suggestions wrap rather than scroll. Upstream lays them out as a
+        horizontal scroller, which suits short chips; these are whole sentences,
+        and in a 360px drawer the second one is cut off mid-word with nothing to
+        say that it continues.
+      */}
       {suggestions.length > 0 && !disabled ? (
-        <Suggestions className="mb-2">
+        <Suggestions className="mb-2 w-full flex-wrap">
           {suggestions.map((suggestion) => (
             <Suggestion key={suggestion} onClick={onSend} suggestion={suggestion} />
           ))}
@@ -82,34 +87,33 @@ export function Composer({
         onRemoveFile={onRemoveFile}
         onSubmit={(message) => onSend(message.text)}
       >
-        <PromptInputBody>
-          {attachments.length > 0 ? (
-            <PromptInputHeader>
-              <ComposerAttachments attachments={attachments} onRemove={onRemoveFile} />
-            </PromptInputHeader>
-          ) : null}
+        {attachments.length > 0 ? (
+          <PromptInputHeader>
+            <ComposerAttachments attachments={attachments} onRemove={onRemoveFile} />
+          </PromptInputHeader>
+        ) : null}
 
-          <PromptInputTextarea
-            aria-describedby={reason === '' ? undefined : hintId}
-            aria-label="Message"
-            disabled={disabled}
-            {...(maxLength > 0 ? { maxLength } : {})}
-            placeholder={
-              disabled ? reason : 'Ask about this installation, or tell it what to change…'
-            }
+        <PromptInputTextarea
+          aria-describedby={reason === '' ? undefined : hintId}
+          aria-label="Message"
+          disabled={disabled}
+          {...(maxLength > 0 ? { maxLength } : {})}
+          // Said once. The reason lives in the hint below, where it has an
+          // icon, can wrap, and is what `aria-describedby` points at; repeating
+          // it in the placeholder of a box nobody can type in is just noise.
+          placeholder={disabled ? '' : 'Ask about this installation, or tell it what to change…'}
+        />
+
+        <PromptInputFooter>
+          <PromptInputTools>
+            <PromptInputAttachButton disabled={disabled} />
+          </PromptInputTools>
+          <PromptInputSubmit
+            disabled={disabled && phase !== 'streaming'}
+            onStop={onStop}
+            status={submitStatus}
           />
-
-          <PromptInputFooter>
-            <PromptInputTools>
-              <PromptInputAttachButton disabled={disabled} />
-            </PromptInputTools>
-            <PromptInputSubmit
-              disabled={disabled && phase !== 'streaming'}
-              onStop={onStop}
-              status={submitStatus}
-            />
-          </PromptInputFooter>
-        </PromptInputBody>
+        </PromptInputFooter>
       </PromptInput>
 
       {reason === '' ? null : (
