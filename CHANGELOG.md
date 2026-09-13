@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-09-13
+
+### Fixed
+
+- The upgrade-wizard functional test re-added the legacy `messages` column in
+  every `setUp()`. On MariaDB the testing framework keeps the schema for the
+  whole test class, so five of the six tests failed with "Duplicate column
+  name". SQLite hid it by rebuilding the database per test method. No shipped
+  code changed.
+
 ## [2.0.0] - 2026-09-13
 
 TYPO3's own MCP tools are executed **in-process** now, as the acting backend
