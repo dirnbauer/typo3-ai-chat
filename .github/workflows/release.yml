@@ -42,18 +42,21 @@ jobs:
       - name: composer.json is valid
         run: composer validate --strict
 
+      # Written to a file, never interpolated into the shell: an expression like
+      # ${{ steps.x.outputs.body }} is pasted into the script before bash sees
+      # it, so a backtick or $(...) anywhere in the changelog section would be
+      # executed instead of published.
       - name: Release notes
-        id: notes
         run: |
-          {
-            echo 'body<<RELEASE_NOTES'
-            awk -v tag="${GITHUB_REF_NAME#v}" '
-              $0 ~ "^## \\[" tag "\\]" { found = 1; next }
-              found && /^## \[/ { exit }
-              found { print }
-            ' CHANGELOG.md
-            echo 'RELEASE_NOTES'
-          } >> "$GITHUB_OUTPUT"
+          awk -v tag="${GITHUB_REF_NAME#v}" '
+            $0 ~ "^## \\[" tag "\\]" { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > "${RUNNER_TEMP}/release-notes.md"
+          if [ ! -s "${RUNNER_TEMP}/release-notes.md" ]; then
+            echo "::error::CHANGELOG.md has no section for ${GITHUB_REF_NAME#v}." >&2
+            exit 1
+          fi
 
       - name: Create the release
         env:
@@ -61,4 +64,4 @@ jobs:
         run: |
           gh release create "${GITHUB_REF_NAME}" \
             --title "${GITHUB_REF_NAME}" \
-            --notes "${{ steps.notes.outputs.body }}"
+            --notes-file "${RUNNER_TEMP}/release-notes.md"
