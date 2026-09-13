@@ -161,10 +161,18 @@ final class MessagesToRowsUpgradeWizardTest extends AbstractChatFunctionalTestCa
      * 2.0's schema has no `messages` column, so an upgrade scenario has to put
      * one back — exactly as it exists on a site that has not yet run the
      * database analyser's DROP.
+     *
+     * The testing framework resets table *data* between test methods but keeps
+     * the schema for the whole class, so the column survives into the next
+     * setUp() and adding it again would fail with "Duplicate column name".
      */
     private function addLegacyColumn(): void
     {
         $connection = $this->get(ConnectionPool::class)->getConnectionForTable(ConversationRepository::TABLE);
+        $columns = $connection->createSchemaManager()->listTableColumns(ConversationRepository::TABLE);
+        if (isset($columns['messages'])) {
+            return;
+        }
         $connection->executeStatement(
             'ALTER TABLE ' . ConversationRepository::TABLE . ' ADD COLUMN messages mediumtext',
         );
